@@ -1,0 +1,34 @@
+{
+  "about": [
+    "Questions for tools/librarian-eval.mjs, over the demo set (tools/demo-set.txt; docs/LIBRARIAN.md, experiment 2).",
+    "q: the question. says: patterns (case-insensitive) that the answer must all match.",
+    "cites: what the answer must cite at least one of: a library (its id's beginning, without the date) and a book (its id), with c and b for a passage (within 2 blocks), or an article (its title); a library alone for any of its books.",
+    "nothing: the library holds no answer, and the Librarian must say he found nothing that says so."
+  ],
+  "questions": [
+    { "q": "Who wrote Language: An Introduction to the Study of Speech?", "says": ["Sapir"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "12629" }] },
+    { "q": "How does Edward Sapir define language?", "says": ["symbol"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "12629", "c": 0 }] },
+    { "q": "Where and when did Edward Sapir sign the preface of his book Language?", "says": ["Ottawa", "1921"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "12629", "c": 0, "b": 11 }] },
+    { "q": "What does Sapir's book Language say about the Morse telegraph code?", "says": ["letters|written speech|sequence|dots"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "12629", "c": 0, "b": 59 }] },
+    { "q": "Who wrote The Story of the Alphabet?", "says": ["Clodd", "Ege"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "46388" }, { "lib": "gutenberg_en_lcc-p", "book": "62374" }] },
+    { "q": "Do you have any books by Otto Jespersen?", "says": ["Its Nature"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "53038" }] },
+    { "q": "When was The Life of Cardinal Mezzofanti published?", "says": ["1858"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "69473", "c": 0, "b": 8 }] },
+    { "q": "How many signs does Ernest Thompson Seton's Sign Talk give?", "says": ["1[,\\s]?725"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "50938", "c": 0, "b": 6 }] },
+    { "q": "When did Ernest Thompson Seton first come across sign language?", "says": ["1882"], "cites": [{ "lib": "gutenberg_en_lcc-p", "book": "50938", "c": 0, "b": 15 }] },
+    { "q": "When was William Shakespeare born?", "says": ["1564"], "cites": [{ "lib": "wikipedia_en_100", "article": "William Shakespeare" }] },
+    { "q": "When did Elizabeth II die?", "says": ["September", "2022"], "cites": [{ "lib": "wikipedia_en_100", "article": "Elizabeth II" }] },
+    { "q": "Who was Nelson Mandela?", "says": ["South Africa"], "cites": [{ "lib": "wikipedia_en_100", "article": "Nelson Mandela" }] },
+    { "q": "What is the capital of Germany?", "says": ["Berlin"], "cites": [{ "lib": "wikipedia_en_100", "article": "Germany" }] },
+    { "q": "What is insulin?", "says": ["hormone"], "cites": [{ "lib": "wikipedia_en_medicine_mini", "article": "Insulin" }] },
+    { "q": "Who discovered penicillin?", "says": ["Fleming"], "cites": [{ "lib": "wikipedia_en_medicine_mini", "article": "Penicillin" }] },
+    { "q": "What is the speed of light in vacuum?", "says": ["299[,\\s]?792[,\\s]?458"], "cites": [{ "lib": "wikipedia_en_physics_mini", "article": "Speed of light" }] },
+    { "q": "What is a prime number?", "says": ["greater than (?:1|one)"], "cites": [{ "lib": "wikipedia_en_mathematics_mini", "article": "Prime number" }] },
+    { "q": "What is the atomic number of carbon?", "says": ["\\b6\\b|\\bsix\\b"], "cites": [{ "lib": "wikipedia_en_chemistry_mini", "article": "Carbon" }] },
+    { "q": "Who founded the Masters Tournament?", "says": ["Jones", "Roberts"], "cites": [{ "lib": "wikipedia_en_golf_maxi", "article": "Masters Tournament" }] },
+    { "q": "Who has won the Masters the most times?", "says": ["Nicklaus"], "cites": [{ "lib": "wikipedia_en_golf_maxi" }] },
+    { "q": "What did Edward Sapir eat for breakfast?", "nothing": true },
+    { "q": "Do you have Moby Dick?", "nothing": true },
+    { "q": "What was William Shakespeare's favourite colour?", "nothing": true },
+    { "q": "Which is the best book about language here?", "nothing": true }
+  ]
+}

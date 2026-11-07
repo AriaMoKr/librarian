@@ -5,7 +5,7 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 (CLAUDE.md, "Branches and sites"). These are the proposals, cheapest first, each one something to
 try on its own.
 
-**Built so far** (SPEC §5.10): experiment 1, all four steps.
+**Built so far** (SPEC §5.10): experiment 1, all four steps, and experiment 2's first step.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -25,8 +25,18 @@ try on its own.
   English voice of the device's own (never a network voice, which would send the words to its
   service), a man's where one is known by name. A new question stops the last answer. Where the
   device has no such voice, the choice says so.
+- **Experiment 2, step 1: his reading.** A model of Ollama's (gemma4:12b) gets the library as
+  tools (search the books, the articles and the full text; read a book or an article a page at a
+  time; find words in one) and answers in one to three sentences, each citing what it read. Each
+  sentence is then held to the citation rule in code, and what fails is struck; with nothing left
+  he says "I found nothing that says so." The server forwards each turn to Ollama on the same
+  machine (`--ollama <model>`) and logs nothing. Not yet on the page. Measured with eight models
+  over the 24 questions: gemma4:12b answered all of them right, with nothing struck, in both runs;
+  qwen3:8b and gemma4:26b 23; none made up a source (SPEC §5.10).
 
-Next: experiment 2, once a model is chosen (a hosted one, or a local one such as Ollama).
+Next: experiment 2's step 2, the card: his answer with its sources numbered, each opening its book
+at the paragraph (through his walk), chosen in the help and offered only where the server has a
+model.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,
@@ -56,11 +66,24 @@ it never speculates: every statement points to a source, a book and a block anch
 selecting the source opens the book at that exact paragraph. This is the core of the idea, and the
 citation rule also keeps the model from making things up.
 
-- It runs through the Node server (a route beside `server/http.js`'s), because the static site
-  cannot hold an API key. The key goes in the server's environment, set by hand, never through
-  chat; or a local model (Ollama) instead.
-- It is opt-in: a question sent to a hosted model leaves the device.
-- It would use Claude Haiku 5.5 (`claude-haiku-5-5`) or Sonnet 5.5 (`claude-sonnet-5-5`).
+- **A local model, through Ollama** (chosen 2026-11-07). The page holds the conversation and runs
+  the tools; the Node server forwards each turn to Ollama on the same machine (`--ollama <model>`,
+  a route beside `server/http.js`'s), so the question never leaves it. Any of Ollama's models that
+  can call tools will do; gemma4:12b by default, chosen over seven others on the questions below.
+  The static site has no model: there he answers as in experiment 1 (step 4 would change that).
+- **The citation rule, in code** (`librarian/cite.js`). Each sentence must end with ids the tools
+  gave; a quote must be in the passage it cites (or the one that has it is cited instead); its
+  numbers and names must be in what it cites, or round it (the book's title and author, the
+  section); it may judge or guess ("the best", "probably") only where its sources do, and never
+  say what he thinks; and at least half its other words must be there. What fails is struck. He
+  must search before he answers, and with nothing left he says "I found nothing that says so."
+- **Opt-in**: a choice in the help, off at first, and offered only where the server has a model.
+- **Steps**: 1. the reading, the rule, the route and an evaluation (`tools/librarian-eval.mjs`:
+  24 questions over the demo set, 4 of them with no answer there); 2. the card; 3. VR and the
+  voice; 4. later, the Pages site with a visitor's own Ollama.
+- **A hosted model later**: Claude Haiku 5.5 (`claude-haiku-5-5`) or Sonnet 5.5
+  (`claude-sonnet-5-5`) can come through the same loop. Its key goes in the server's environment,
+  set by hand, never in chat, a commit or the site, and a question sent to it leaves the device.
 
 ### 3. Cross-references between libraries
 
@@ -90,7 +113,7 @@ once. This tells us whether that route is open at all.
 then plugs a model into the same desk, and its citation rule is what makes it the Librarian rather
 than a chatbot.
 
-To decide before experiment 2: a hosted model with an API key, or a local model.
+Decided for experiment 2: a local model, through Ollama (gemma4:12b by default).
 
 ## Ground rules
 

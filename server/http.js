@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import zlib from 'node:zlib';
 import { snippetTarget } from '../public/js/core/content/find.js';
+import { LIMITS as TURN_LIMITS, RequestError } from './librarian.js';
 import { LibraryError } from './library.js';
 import { DEFAULT_VENDOR_DIRS, rewriteVendorImports, vendorFileOf } from './vendor.js';
 
@@ -87,9 +88,11 @@ class BadRequest extends Error {}
  * @param {(msg: string) => void} [opts.log=console.error] error log
  * @param {ReturnType<typeof import('./kiwix-serve.js').kiwixServe> | null} [opts.kiwix] full-text
  *   search through kiwix-serve (--kiwix-serve), for the libraries whose file it serves too
+ * @param {import('./librarian.js').LibrarianModel | null} [opts.librarian] the Librarian's model
+ *   through Ollama (--ollama): the routes under /api/librarian
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createApp(library, { publicDir = DEFAULT_PUBLIC_DIR, vendorDirs = DEFAULT_VENDOR_DIRS, log = console.error, kiwix = null } = {}) {
+export function createApp(library, { publicDir = DEFAULT_PUBLIC_DIR, vendorDirs = DEFAULT_VENDOR_DIRS, log = console.error, kiwix = null, librarian = null } = {}) {
   const publicRoot = path.resolve(publicDir);
   const vendorRoots = new Map(Object.entries(vendorDirs).map(([k, v]) => [k, path.resolve(v)]));
   // Serialized JSON (+ gzip, + ETag) of long-lived objects: book lists and reading metadata.
@@ -123,6 +126,8 @@ export function createApp(library, { publicDir = DEFAULT_PUBLIC_DIR, vendorDirs 
       const libraries = await librariesInfo();
       return sendBody(req, res, serialize({ ...result, libraries }), { cacheControl: 'no-store' });
     }
+    // The Librarian's model (--ollama): its own methods (a turn is a POST).
+    if (area === 'api' && segments[1] === 'librarian') return librarianApi(req, res, segments.slice(2));
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.setHeader('Allow', 'GET, HEAD');
       if (area === 'api' || area === 'zim') return sendError(req, res, 405, 'method not allowed');
@@ -277,6 +282,43 @@ export function createApp(library, { publicDir = DEFAULT_PUBLIC_DIR, vendorDirs 
   }
 
   // ------------------------------------------------------------------------------------------
+  // /api/librarian: the Librarian's model (server/librarian.js, §4)
+
+  async function librarianApi(req, res, segs) {
+    if (segs.length && segs[segs.length - 1] === '') segs = segs.slice(0, -1);
+    const reply = (value) => sendBody(req, res, new Body(Buffer.from(JSON.stringify(value), 'utf8')), { cacheControl: 'no-store' });
+    const none = () => sendError(req, res, 404, 'no model here (the server runs without --ollama)');
+    if (segs.length === 0) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.setHeader('Allow', 'GET, HEAD');
+        return sendError(req, res, 405, 'method not allowed');
+      }
+      return librarian ? reply(await librarian.info()) : none();
+    }
+    if (segs.length === 1 && segs[0] === 'chat') {
+      if (req.method !== 'POST') {
+        res.setHeader('Allow', 'POST');
+        return sendError(req, res, 405, 'use POST');
+      }
+      if (!librarian) return none();
+      // Only this site's own page: another site's (a browser says so) never reaches the model, and
+      // JSON alone makes a browser ask first (CORS), which nothing here allows.
+      const site = req.headers['sec-fetch-site'];
+      if (site && site !== 'same-origin' && site !== 'none') return sendError(req, res, 403, 'only this site\'s own page may ask');
+      if (!/^application\/json\s*(;|$)/i.test(String(req.headers['content-type'] ?? ''))) return sendError(req, res, 415, 'send JSON (Content-Type: application/json)');
+      const raw = await readBody(req, TURN_LIMITS.bytes);
+      let body;
+      try {
+        body = JSON.parse(raw.toString('utf8'));
+      } catch {
+        throw new RequestError(400, 'the request is not JSON');
+      }
+      return reply(await librarian.chat(body));
+    }
+    return sendError(req, res, 404, 'unknown API endpoint');
+  }
+
+  // ------------------------------------------------------------------------------------------
   // /zim/:lib/<ns>/<url>
 
   async function zim(req, res, segs) {
@@ -399,8 +441,11 @@ export function createApp(library, { publicDir = DEFAULT_PUBLIC_DIR, vendorDirs 
   return function handler(req, res) {
     handle(req, res).catch((err) => {
       const bad = err instanceof BadRequest;
-      const status = bad ? 400 : err instanceof LibraryError ? err.status : 500;
-      if (status >= 500) log(`${req.method} ${req.url}: ${err?.stack ?? err}`);
+      const status = bad ? 400 : err instanceof LibraryError || err instanceof RequestError ? err.status : 500;
+      // The Librarian's failures say what failed, never what was asked (server/librarian.js).
+      if (err instanceof RequestError) {
+        if (status >= 500) log(`librarian: ${err.message}`);
+      } else if (status >= 500) log(`${req.method} ${req.url}: ${err?.stack ?? err}`);
       if (res.headersSent) {
         res.destroy();
         return;
@@ -434,6 +479,37 @@ class Body {
     }
     return this._gzip;
   }
+}
+
+/**
+ * A request's body, at most `max` bytes (a RequestError 413 past that: the rest is drained, not kept).
+ * @param {import('node:http').IncomingMessage} req
+ * @param {number} max
+ * @returns {Promise<Buffer>}
+ */
+function readBody(req, max) {
+  return new Promise((resolve, reject) => {
+    const tooBig = () => new RequestError(413, `the request is larger than ${max} bytes`);
+    if (Number(req.headers['content-length']) > max) {
+      req.resume();
+      return reject(tooBig());
+    }
+    const parts = [];
+    let size = 0;
+    let over = false;
+    req.on('data', (chunk) => {
+      if (over) return;
+      size += chunk.length;
+      if (size <= max) return void parts.push(chunk);
+      over = true;
+      parts.length = 0;
+      reject(tooBig());
+    });
+    req.on('end', () => {
+      if (!over) resolve(Buffer.concat(parts));
+    });
+    req.on('error', reject);
+  });
 }
 
 /**

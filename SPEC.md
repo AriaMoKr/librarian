@@ -900,19 +900,27 @@ export class ArchiveLibrary {
 
 ### 3.7 `server/http.js` and `server/index.js`
 
-`export function createApp(library, { publicDir, vendorDirs, log, kiwix })` → `(req, res) => void` handler.
+`export function createApp(library, { publicDir, vendorDirs, log, kiwix, librarian })` → `(req, res) => void` handler.
 `index.js` CLI:
 
 ```
 node server/index.js [--dir <path>] [--port 8080] [--host 0.0.0.0] [--https] [--https-port 8443]
                      [--no-http] [--cert <file> --key <file>] [--max-generic 2000] [--no-watch]
-                     [--kiwix-serve <url>] [--quiet]
+                     [--kiwix-serve <url>] [--ollama <model> [--ollama-url <url>]] [--quiet]
 ```
 - `--kiwix-serve <url>` (optional): full-text search through Kiwix's own server, kiwix-serve
   (`server/kiwix-serve.js`), which searches the Xapian indexes inside ZIM files. A library whose
   file it serves too (the same UUID, from its catalogue, asked again after a minute) gets
   `"fulltext": true` in `GET /api/libraries` and the `text` and `find` routes (§4). Without it, or
   while kiwix-serve cannot be reached, search is as before.
+- `--ollama <model>` (optional; docs/LIBRARIAN.md, experiment 2): the Librarian reads and answers
+  with this model of Ollama's (a model server on this machine; `--ollama-url` names another, and
+  needs `--ollama`), through `server/librarian.js` (`LibrarianModel`) and the `librarian` routes
+  (§4, §5.10). The name is one "ollama list" shows (letters, digits and `. : / _ -`). The model
+  must be able to call tools: Ollama's `/api/show` says so (it loads nothing), asked at the start
+  and, while it fails, again 10 s later. The start prints "The librarian answers with <model>
+  through Ollama at <url>", or on stderr why he cannot yet ("Ollama cannot be reached at …", "the
+  model … cannot call tools"); the server runs either way. Without it there are no such routes.
 - `--dir` defaults to `process.cwd()`. **Conventional ports: HTTP 8080 (`--port`), HTTPS 8443
   (`--https-port`).** `--https` (also implied by `--https-port`, `--cert`/`--key`) adds the HTTPS
   listener next to plain HTTP: one process, one shared `Library`, two servers; `--no-http` keeps
@@ -1034,6 +1042,37 @@ copy of this file)"). Copies once shared a checkpoint: one's removal ran while t
 "js/interaction.js" | null }`, the newest modification time among the client files (`public/`,
 dotfiles skipped), walked on every request since the files may change while the server runs.
 `Cache-Control: no-store`.
+
+**`GET /api/librarian`** (with `--ollama`, §3.7; 404 `{ "error": "no model here (the server runs
+without --ollama)" }` without, and on the static site) → `{ "model": "gemma4:12b", "ready": true }`,
+or `"ready": false` with `"error"` while Ollama cannot be reached, has no such model or the model
+cannot call tools. `Cache-Control: no-store`. Other methods → 405.
+
+**`POST /api/librarian/chat`** (with `--ollama`, 404 without) → one turn of the Librarian's reading
+(§5.10, `librarian/read.js`), forwarded to Ollama's `/api/chat` with the server's model and
+settings (`server/librarian.js`: 8,192 tokens of context, temperature 0.2, at most 1,024 tokens a
+reply, thinking off where the model can be told so and low for gpt-oss, the model kept loaded for
+30 minutes after each turn). The body, JSON (`Content-Type: application/json`) of at most 256 KB:
+```json
+{ "messages": [ { "role": "system" | "user" | "assistant" | "tool", "content": "…",
+    "tool_calls": [ { "function": { "name": "read", "arguments": { "id": "B1" } } } ],
+    "tool_name": "read" } ],
+  "tools": [ { "type": "function", "function": { "name", "description", "parameters" } } ],
+  "warm": false }
+```
+(`tool_calls` on an assistant's message, `tool_name` on a tool's; at most 48 messages of 24,000
+characters, 8 tools and 8 calls a message.) It is copied field by field: nothing else reaches
+Ollama, and the model is always the server's. `warm: true` asks for one token: it loads the model
+and reads the instructions and tools before the first question. → `{ "message": { "role":
+"assistant", "content", "tool_calls"? }, "done": "stop" | "length" | null, "timings": { "load",
+"prompt", "reply", "promptTokens", "tokens" } }` (seconds and tokens; a call's arguments always an
+object, also where the model wrote them as JSON text). Errors: 400 (not such a turn, or not
+JSON), 403 (the browser says another site's page sent it: `Sec-Fetch-Site` neither `same-origin`
+nor `none`), 405 (not a POST, `Allow: POST`), 413 (too large), 415 (not JSON), 502 (Ollama cannot
+be reached, has no such model, or failed: its status and error), 503 (the model cannot call tools),
+504 (no reply within 3 minutes). Neither the questions nor the answers are logged, and an error
+says what failed, never what was asked. A JSON body makes a browser ask before another site's page
+may send it (CORS), and nothing here allows that.
 
 **`GET /api/libraries/:lib/books`** →
 ```json
@@ -1174,6 +1213,9 @@ public/
     librarian/path.js    Floor: a room's floor as a grid, ways across it round what stands there (A*); along a way.
     librarian/walk.js    Walk: where he and the viewer are along a walk (eased, a blink in VR); WayLine, the way on the floor.
     librarian/voice.js   Voice: his answers said aloud with the device's own English voice (speechSynthesis); chooseVoice.
+    librarian/tools.js   LibraryTools: the library as a model's tools (search, read, find), all it showed kept by id (pure but for the library).
+    librarian/read.js    readFor: a model reads for a question through the tools, turn by turn; finish: its answer held to the rule (pure).
+    librarian/cite.js    the citation rule: checkAnswer keeps the sentences that what they cite says (pure).
     librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choice.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
 ```
@@ -2314,8 +2356,10 @@ The Librarian's experiments (docs/LIBRARIAN.md) are librarian's own; the rest of
 vrlbry's. So their code stays in `librarian/` and `css/librarian.css`, main.js wires them with one
 call (`startLibrarian({ overlay, interaction, tv })`), the overlay gives them two hooks
 (`onRemoteStart`, `addUiPart`) and interaction three (`addPanel`, `addTarget`, `onFrame`: §5.6).
-Built so far, with no model: experiment 1, all four steps (2026-11-07): the words in the card, the
-figure beside the stand with his panel in VR, his walk to the book, and his voice.
+Built so far: experiment 1, all four steps (2026-11-07), with no model: the words in the card, the
+figure beside the stand with his panel in VR, his walk to the book, and his voice. Experiment 2's
+step 1 (2026-11-07): his reading with a model of Ollama's, its citation rule and the server's route
+to Ollama, measured over 24 questions (Answers with citations, below); not yet on the page.
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
   the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks }` (kept whole) and on
@@ -2619,3 +2663,128 @@ figure beside the stand with his panel in VR, his walk to the book, and his voic
     and he said the words; "insulin" asked on the panel was answered aloud; pressed again, off.
   - axe with the help dialog open: on a desktop only `.ov-libs`, as before; nothing on a phone or
     a TV.
+
+#### Answers with citations (experiment 2)
+
+A language model reads the library for an answer, and the answer keeps only what a source it read
+says (docs/LIBRARIAN.md). Step 1 (2026-11-07) is the reading, its tools, the citation rule and
+the server's route to the model; the page does not use them yet (step 2: the card).
+
+- **The model** is one of Ollama's on the server's machine (`--ollama <model>`, §3.7), through
+  `POST /api/librarian/chat` (§4): the page holds the conversation and runs the tools, the server
+  forwards each turn. Nothing else is sent anywhere, and nothing is logged.
+- **The tools** (`tools.js`, `LibraryTools`), over the library's `Access`: on the page `search.js`
+  and `api.js`, in the evaluation the server's own HTTP API. Each call's text for the model:
+  - `search_books { query, author? }`: books by words of their title or author (ask.js
+    `booksFor`; a Wikipedia's volumes left out), at most 8 lines `[B1] Title: subtitle, by Author
+    (Library)`, and how many more.
+  - `search_articles { query }`: Wikipedia articles whose title begins with the words, or with
+    them without a leading "the", "a" or "an" (`findArticles`, §2.5), the name as asked first, then
+    names beginning with it as a whole word: `[A1] Title (Library) (found as “other name”)`.
+  - `search_text { query }`, offered only where a library has `fulltext` (§3.7): kiwix-serve's
+    hits, `[T1] Title, by Author (Library): “snippet”`.
+  - `read { id, page? }`: a book, an article, a hit, a section or a passage, from its place on, a
+    page at a time: passages until 3,000 characters, each `[P1] text` (cut at 800 characters for
+    the model; the whole passage is held), headings as `— heading —`, then `More: read {"id":
+    "B1","page":2}` or "(The end.)". A book's first page lists its contents (levels 1 and 2, a
+    short heading joined to the next: "I. Introductory: Language Defined") as sections `[S1]`; an
+    article's lists its sections (headings of levels 2 and 3). An article, and what is in one, is
+    read to its own end (one chunk), never into the next; a hit from one block before where
+    `findText` places it.
+  - `find { id, words }`: the passages of a whole book or article (at most 60 chunks) holding all
+    the words, at most 6 shown, and how many there are.
+  - A passage is one block (§3.5) as one line (`blockText`): a list item with "•", a table row as
+    "head: cells; …", references ("[1]", "[citation needed]") taken out; pictures are skipped.
+  - Everything shown is kept by its id (`sources`): `B` books, `A` articles, `T` hits, `S`
+    sections, `P` passages, each with its library, book, place `{ c, b }`, title, text and context
+    (its book's or article's line, then its section). The same thing keeps its id within a
+    question. A tool never throws: a failure, an unknown tool or id is said to the model.
+- **The reading** (`read.js`, `readFor`). The model is told (`SYSTEM`) that it is the Librarian,
+  who only finds things (never guesses, speculates, draws conclusions or uses its own knowledge):
+  search, read, then answer in English in one to three short sentences, each ending with the ids
+  it comes from (`[P4]`, `[B2][P7]`), quoting exactly, or say exactly "I found nothing that says
+  so." Then the question, and turn by turn, at most 6 (`MAX_ROUNDS`):
+  - the model's tool calls are run, at most 4 a turn (`MAX_CALLS`), and their texts go back to it;
+    calls written as JSON text naming a tool count as calls;
+  - an answer before any search is sent back: "You have not searched the library yet. …";
+  - the last turn offers no tools and asks for the answer.
+
+  A newer question stops it (`signal`: an AbortError). `finish` then holds the answer to the
+  citation rule: the sentences kept, each with its own full stop and the numbers of its sources
+  (from 1, in the order first cited), or "I found nothing that says so." (`NOTHING`) with none;
+  also what was struck and why, ids made up, the calls, the turns and the times. `warmTurn` is the
+  warm-up's turn: the instructions and the tools.
+- **The citation rule** (`cite.js`, `checkAnswer`, pure). The answer is taken apart into
+  sentences (`statementsOf`: not after an abbreviation or an initial; thinking left in and copied
+  references "[1]" taken out), each with the ids in it or right after it, written `[P3]`,
+  `[P3, P4]`, `(P3)`, `【P3】`, or several in a row (`[B1][P2]`, `[P2], [P5], and [P7]`). A
+  sentence saying nothing was found ("I found nothing that says
+  so", "could not find", "does not say") counts as that, cited or not. A sentence is struck, and
+  why is kept, when:
+  1. it cites nothing ("cites nothing"), or only ids no tool gave ("cites only what it was not
+     shown"; such ids are counted as made up);
+  2. it says what he thinks ("I think", "I believe", "in my opinion");
+  3. it quotes words ("…", “…”, or ‘…’ round three words or more) that are not in what it cites
+     or round it; when another thing shown has them, that is cited too ("quotes words that no
+     source has");
+  4. a number in it (thousands' commas and spaces taken out; not the digits of a word or an id,
+     "A1") is not in what it cites or round it ("a number its sources do not have");
+  5. a capitalized word in it that is no common word ("The", "Based", "I'll") is not there, by its
+     stem (`stem`: its first 5 letters without a plain ending; "Stratford-upon-Avon" is three
+     words) ("a name its sources do not have"). A name of several words ("Jack Nicklaus") of which
+     one is there passes when it stands whole in another thing shown, which is then cited too;
+  6. a word that judges or guesses ("best", "recommend", "probably") is not there ("a judgement
+     its sources do not make");
+  7. of its other words of 4 letters or more (not about the sources: "book", "says", "wrote"),
+     when there are 2 or more, fewer than half are there ("says more than its sources").
+- **The evaluation** (`tools/librarian-eval.mjs`, `tools/librarian-questions.json`): 24
+  questions over the demo set (`tools/demo-set.txt`), 4 with no answer there. Each model is
+  warmed up (timed) and each question read as the page would, with the server in the same
+  process; an answer is right when it says what it should (patterns) and cites a right source (a
+  book, a place within 2 blocks, an article), or says it found nothing where nothing is. It
+  prints a line per answer and a table per model, unloads each model after its turn, and saves
+  the run with everything shown (`perf/`), so `--rescore` holds the saved answers to the rule as
+  it is now, without a model.
+- **Measured** (2026-11-07, on the development PC, over the demo set's 7 ZIMs): eight models of
+  Ollama's, each asked the 24 questions twice. The table is the second run, held to the rule above
+  with `--rescore`: answers right (of 24), of them the 4 with nothing to find, sentences struck, ids
+  made up, seconds a question (the median), for all 24, and for the warm-up. gemma4:12b answered all
+  24 in the first run too.
+
+  | model | right | nothing | struck | made up | median s | total s | warm-up s |
+  |---|--:|--:|--:|--:|--:|--:|--:|
+  | gemma4:12b | 24 | 4 | 0 | 0 | 2.6 | 60 | 10.1 |
+  | gemma4:26b | 23 | 4 | 0 | 0 | 3.4 | 82 | 23.7 |
+  | gpt-oss:20b | 18 | 4 | 7 | 0 | 1.7 | 46 | 12.1 |
+  | qwen3:14b | 20 | 4 | 2 | 0 | 2.3 | 60 | 8.9 |
+  | qwen3:8b | 23 | 4 | 2 | 0 | 1.4 | 34 | 7.3 |
+  | qwen3.5:9b | 22 | 4 | 0 | 0 | 1.9 | 45 | 8.4 |
+  | qwen3.5:2b | 13 | 3 | 36 | 0 | 1.3 | 35 | 7.0 |
+  | lfm3:1.7b | 11 | 3 | 12 | 0 | 0.9 | 22 | 3.7 |
+
+  No model made up an id. The rule was calibrated on the first run's strikes (hyphens U+2011,
+  thousands spaced, copied references, a title quoted from its book's line, names of several
+  words, "Based" and "I'll" read as names), and every sentence the second run struck was read: each
+  was the model's doing. Those sentences had:
+  - no ids at all (qwen3.5:2b mostly), or one citation at a paragraph's end for all its sentences
+    (gpt-oss:20b), so the sentences before it cite nothing;
+  - the passage next to the right one cited (the preface's "Ottawa, Ont." stands between "April 8,
+    1921." and "Edward Sapir.");
+  - "Ontario" for the preface's "Ont.": an abbreviation is not spelled out;
+  - the book, article or section cited in place of the passage read (lfm3:1.7b);
+  - wins and years their sources do not have (a list of the Masters' winners).
+
+  Wrong without a strike: nothing found where there is something (gemma4:26b, Sapir's definition;
+  qwen3:14b and qwen3.5:9b, some after a single search), one of the two authors of a Story of the
+  Alphabet named, and a tool call of gpt-oss:20b's that Ollama could not parse (its 500, on the
+  same question in both runs).
+- **Tests.** `test/client-librarian-read.test.js` covers `blockText`; the tools over a small faked
+  library (ids kept, the Wikipedia's volumes left out, articles ranked, a book's pages and
+  contents, a section, an article to its own end and its sections, find, the full text read from
+  its place, failures said); the sentences and their ids; each rule, kept and struck; the reading
+  with a scripted model (calls run and sent back, search first, the last turn, calls written as
+  text, at most 4 calls, stopping, the warm-up, nothing left). `test/librarian-server.test.js`
+  covers the turn checked and copied, the model's settings and thinking, tool calls' arguments,
+  failures (no tools, no such model, Ollama's errors, unreachable, too slow) said without the
+  question, the routes (`createApp`: with and without a model, JSON from this site only, sizes,
+  methods) and `--ollama` / `--ollama-url`.

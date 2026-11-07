@@ -4,7 +4,7 @@
  *
  *   node server/index.js [--dir <path>] [--port 8080] [--host 0.0.0.0] [--https] [--https-port 8443]
  *                        [--no-http] [--cert <file> --key <file>] [--max-generic 2000] [--no-watch]
- *                        [--kiwix-serve <url>] [--quiet]
+ *                        [--kiwix-serve <url>] [--ollama <model> [--ollama-url <url>]] [--quiet]
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createApp } from './http.js';
 import { kiwixServe } from './kiwix-serve.js';
+import { LibrarianModel, OLLAMA_URL } from './librarian.js';
 import { Library } from './library.js';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -43,6 +44,9 @@ Options:
   --no-watch           do not pick up added/removed .zim files while running
   --kiwix-serve <url>  full-text search through Kiwix's server (kiwix-serve) at <url>, for the
                        libraries whose file it serves too (the same ZIM)
+  --ollama <model>     the Librarian answers with this model of Ollama's ("gemma4:12b"), once a
+                       visitor chooses it in the help (docs/LIBRARIAN.md, experiment 2)
+  --ollama-url <url>   Ollama's address (default ${OLLAMA_URL})
   --quiet              only print problems and the server URL
   -h, --help           show this help
 `;
@@ -52,7 +56,7 @@ Options:
  * @param {string[]} argv arguments without node and script (process.argv.slice(2))
  * @returns {{ dir: string, port: number, host: string|undefined, https: boolean,
  *   cert: string|null, key: string|null, maxGeneric: number, watch: boolean, kiwixServe: string|null,
- *   quiet: boolean, help: boolean }}
+ *   ollama: string|null, ollamaUrl: string, quiet: boolean, help: boolean }}
  * @throws {Error} with a user-facing message on invalid arguments
  */
 export function parseCliArgs(argv) {
@@ -71,6 +75,8 @@ export function parseCliArgs(argv) {
       'max-generic': { type: 'string' },
       'no-watch': { type: 'boolean', default: false },
       'kiwix-serve': { type: 'string' },
+      ollama: { type: 'string' },
+      'ollama-url': { type: 'string' },
       quiet: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
@@ -94,6 +100,8 @@ export function parseCliArgs(argv) {
     maxGeneric: values['max-generic'] === undefined ? 2000 : int('max-generic', values['max-generic'], 1, 10_000_000),
     watch: !values['no-watch'],
     kiwixServe: values['kiwix-serve'] ?? null,
+    ollama: values.ollama ?? null,
+    ollamaUrl: values['ollama-url'] ?? OLLAMA_URL,
     quiet: values.quiet,
     help: values.help,
   };
@@ -102,6 +110,11 @@ export function parseCliArgs(argv) {
   if (opts.kiwixServe !== null && !/^https?:\/\/[^/]/i.test(opts.kiwixServe)) {
     throw new Error(`--kiwix-serve must be an http(s) address (got ${JSON.stringify(opts.kiwixServe)})`);
   }
+  if (opts.ollama !== null && !/^[\w.:/-]{1,200}$/.test(opts.ollama)) {
+    throw new Error(`--ollama must name a model, as "ollama list" shows it (got ${JSON.stringify(opts.ollama)})`);
+  }
+  if (values['ollama-url'] !== undefined && !opts.ollama) throw new Error('--ollama-url needs --ollama <model>');
+  if (!/^https?:\/\/[^/]/i.test(opts.ollamaUrl)) throw new Error(`--ollama-url must be an http(s) address (got ${JSON.stringify(opts.ollamaUrl)})`);
   return opts;
 }
 
@@ -284,7 +297,15 @@ export async function main(argv = process.argv.slice(2), { out = console.log, er
       ? `Full-text search through kiwix-serve at ${kiwix.url}: ${searchable} of ${library.list().length} libraries`
       : `kiwix-serve at ${kiwix.url} cannot be reached (yet): full-text search once it can`);
   }
-  const app = createApp(library, { log: err, kiwix });
+  // The Librarian's model: looked at once now (which loads nothing), loaded at a visitor's first
+  // question or warm-up.
+  const librarian = opts.ollama ? new LibrarianModel({ model: opts.ollama, url: opts.ollamaUrl }) : null;
+  if (librarian) {
+    const p = await librarian.probe();
+    if (p.ok) info(`The librarian answers with ${librarian.model} through Ollama at ${librarian.url}`);
+    else err(`The librarian cannot answer with ${librarian.model} yet: ${p.error}`);
+  }
+  const app = createApp(library, { log: err, kiwix, librarian });
 
   let tls = null;
   if (opts.https) {
