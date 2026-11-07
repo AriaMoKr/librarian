@@ -1136,6 +1136,7 @@ Correct MIME types (`.js` → `text/javascript`, `.mjs`, `.css`, `.html`, `.json
 public/
   index.html             Landing overlay + canvas host, import map, Enter VR button.
   css/style.css
+  css/librarian.css      the librarian's part of the card (§5.10), after style.css.
   reader-test.html       2D harness: pick a library/book, render pages on a <canvas>, arrows to flip.
   js/
     api.js               (exists) fetch wrappers for §4.
@@ -1164,6 +1165,9 @@ public/
     reset.js             "Reset stored data": the parts of what the site keeps in the browser (RESET_PARTS), cleared by resetStoredData.
     scene.js             scenes: sceneOf / restoreScene / saveScene / savedScene / parseScene (one saved in the browser).
     perf-scenarios.js    built-in performance scenarios, loaded only by perf.run().
+    librarian/ask.js     the librarian (§5.10): a question → searches → an answer and its finds (pure).
+    librarian/card.js    its part of the library card: the question box, the answer, the finds.
+    librarian/librarian.js  startLibrarian: that part put in the card, L, its help choice, Take me there.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
 ```
 
@@ -1735,7 +1739,8 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   `controls.viewpoint()`: x, z, eye height, yaw, pitch), `book` (library, id, title, page label,
   block anchor `{ c, b }`, the side of the spread it is on, and `pages`: 1 or 2 at a time as shown),
   `settings` (fontScale, theme, readScale, readDistance, pageView) and `ui`: `page` (the overlay's `reportUi()`: library card, search box
-  and whether its results are open, update banner, loading/error screen, toasts; as they were
+  and whether its results are open, update banner, loading/error screen, toasts, the parts others
+  add (`addUiPart(name, { state, restore })`: the librarian's question, §5.10); as they were
   when the help was opened, since opening it closes the search results) and the 3D panels
   (`interaction.uiState()`: the kiosk's tab, search and list scrolling; inspect panel, toolbar,
   contents and its scrolling; the book under the pointer). `restoreScene` puts the book back,
@@ -2086,6 +2091,7 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     canvas.
   - Menu goes to where the card was left, else to common's `first()` (`overlay.remoteStart`):
     the book's buttons while one is out (also when the card was left elsewhere), else the
+    librarian's Ask while it is shown in the open card (§5.10: `overlay.onRemoteStart`), else the
     Controls help, never a text box (common's own first stop would be "← Hallway"); in the text
     view, to its toolbar (`textView.cardStart`).
   - Back in the card closes the open dialog (the focus back on its button: `overlay.closeDialog`)
@@ -2254,3 +2260,128 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
     `fulltext`, `text` answers 404 with why, and the checks above give main's results.
 
   The TV itself is another session's (TODO).
+
+### 5.10 The librarian (`librarian/`)
+
+The Librarian's experiments (docs/LIBRARIAN.md) are librarian's own; the rest of the client is
+vrlbry's. So their code stays in `librarian/` and `css/librarian.css`, main.js wires them with one
+call (`startLibrarian({ overlay, interaction, tv })`), and the overlay gives them two hooks
+(`onRemoteStart`, `addUiPart`). Built so far: experiment 1, step 1 (2026-11-07), the words in the
+card, with no model. Still to come in experiment 1: the figure and its panel beside the stand
+(VR), the walk to the book, its voice.
+
+- **Optional.** The help has the choice "Show the librarian (ask it for a book in the card, or
+  press L)", stored as `vrlbry:librarian` = `{ shown }` and on until unticked. Unticked, the card is
+  as it was without it, and L does nothing.
+  - A question is answered by the library's own searches (`search.js`, §5.6), through the
+    server's API or the local worker, as a search typed in the overlay is. Nothing else is sent
+    anywhere.
+- **The question** (`ask.js`, pure, English). `parseQuestion` first takes off:
+  - openers: "Can you find me", "Do you have", "I'm looking for", "Where is", "Who wrote",
+    greetings, …;
+  - closers: ", please", "thanks", "in the library", …;
+  - the question mark.
+
+  Then it reads what is wanted:
+  - an author: "anything by X", "the works of X" (`by`; books);
+  - a subject: "what is X", "who was X", "tell me about X", "the article on X" (articles first;
+    the leading article dropped);
+  - a topic: "books about X" (anything);
+  - a title: "a book called X" (books);
+  - otherwise the words as they are (anything).
+
+  "X by Y" also tries the title X by the author Y (`split`). A question with no words left is a
+  greeting ("Hello. Ask me for a title, an author or a subject.") or gets the prompt alone.
+- **The searches** (`searchesFor`), each tried until one finds something:
+  1. the words as typed, when a book's title is them or begins with them (`namesTitle`: "What Is
+     Man?" and "The Story of the Alphabet" stay titles);
+  2. the question as read;
+  3. the split;
+  4. the words as typed.
+
+  Where the finds come from:
+  - Books: `bookIndex` / `matchBooks`, every word in a book's title, subtitle or author. With `by`,
+    each of its words must begin a word of the author's name. All matches are taken; when there
+    are none, the search is tried again without a leading "the", "a" or "an".
+  - Articles and passages, unless only books are wanted or an author is named: the Wikipedia
+    articles (`findArticles`, for the words and their bare form; an exact name first, then a name
+    that begins with the words, §2.5) and full-text hits (`findInText`, through the server's
+    kiwix-serve only). Each is given 10 s (`ANSWER_WAIT`), else it counts as none, so a failing
+    or stalled search never holds up the answer.
+- **The finds** (`chooseFinds`), at most 5 (`MAX_FINDS`):
+  - for a title or an author: books;
+  - for a subject: the articles, then books, then hits;
+  - otherwise:
+    1. an article named as asked (its name or its redirect's, with or without "the"), unless a
+       book's title is named as asked;
+    2. at most 3 books while there are other finds;
+    3. the articles;
+    4. the rest of the books;
+    5. the hits.
+- **The answer** (`answerText`). The library is named only when several have books.
+  - One find is named: "I have Moby Dick, by Herman Melville, in <library>.", "I have the article
+    “Paris”, in <library>.", "I found “call me ishmael” in Moby Dick, …".
+  - Several are counted: "I have 8 books by Mark Twain; here are the first 5.", "I have 2 books
+    and 3 articles for “Paris”, and more."
+  - None says where it looked: "I have nothing called “x”. I looked in all 4 libraries here.",
+    or "There are no books here yet."
+- **The card's part** (`card.js`, `LibrarianCard`). It sits before the library list and is hidden
+  while the card is collapsed.
+  - A form: "Ask the librarian" labels a search box (`#lb-q`, `enterkeyhint="search"`), followed
+    by an Ask button.
+  - The answer goes in a `role="status"` paragraph, emptied and then set 50 ms later, so a screen
+    reader says each answer once, even when the words are the same as the last answer.
+    "Looking…" shows when the answer takes over 400 ms.
+  - The finds are a list labelled "What the librarian found" (`aria-busy` while looking). Each is
+    a button with:
+    - its cover or icon;
+    - its title;
+    - a line: the author, the library, an article's volume, a hit's snippet;
+    - "Take me there".
+  - A newer question drops an older answer still on its way. A failure says "I could not look
+    just now." The question and its answer stay until the next question.
+- **Take me there** (`takeThere`) works as the search's results do:
+  - a book goes to its shelf and comes out (`searchPick(book, { take: true })`);
+  - an article opens its volume there (`openArticle`);
+  - a hit opens its book at its block (`openText`).
+
+  The button gives up the focus first, so the book's keys go to the view.
+- **Focus.** Where the focus goes after an answer to a question asked from the card:
+  - on a TV, to the first find, so OK takes you there;
+  - on a touch screen, off the box, so the keyboard goes down and the answer can be seen;
+  - elsewhere, it stays in the box (Tab goes to the finds).
+
+  **L** opens a collapsed card and puts the focus in the box, with its words selected. It works
+  in browse or inspect, when nobody is typing and no dialog is open, and not in the text view,
+  VR or the kiosk's search. It is a `document` listener, so it runs before controls.js's on
+  `window`, which then sees the key as taken.
+- **TV** (§5.9). The help has a row for the librarian on each kind of screen.
+  - Menu's first stop is Ask while the card is open (`overlay.onRemoteStart` → `startStop`); with
+    the card collapsed, Menu lands where it did without the librarian.
+  - ↑ from Ask goes to the box, which is held (`inputmode="none"`) until OK.
+  - The keyboard's search key asks.
+  - ↓ goes through the finds, and OK on one takes you there; the remote then walks again.
+- **Layout** (`css/librarian.css`). With an answer the card can grow taller than before, so it
+  stops above the hint at the foot. On a phone held upright it stops above the search field, with
+  one scroll: the library list's own scroll goes (`:has`). A short screen and a TV keep their own
+  rules.
+- **Scenes** (`overlay.addUiPart('librarian', …)`): the question and the answer shown are kept
+  as `ui.page.librarian = { q, answer }`. When a scene is restored, a question that had an answer
+  is asked again.
+- **Tests.** `test/client-librarian.test.js` covers:
+  - the questions read and the searches tried;
+  - the answers;
+  - the finds' order: articles by name, books kept for a title, stalled or failing searches;
+  - the list's markup (fake DOM);
+  - Take me there.
+
+  Checked in headless Chrome with real keys and taps against the demo set (2026-11-07):
+  - On a desktop, L put the focus in the box. "What is insulin?" found 5 articles, Insulin first,
+    and Tab Tab Enter opened it. "Anything by Edward Sapir?" found his book, and Take me there
+    brought it out.
+  - On a phone, the box let go of the focus after the answer, and a tap on a find opened it.
+  - On a TV (`?tv=emulate`), Menu went to Ask, ↑ to the held box, OK let it be typed in, and the
+    search key gave the first find the focus. OK opened it with the focus back on the view, and
+    Menu then went to the book's buttons.
+  - axe with the answer shown: on a desktop only the library list's scrolling
+    (`scrollable-region-focusable`, vrlbry's own); nothing on a phone or a TV.

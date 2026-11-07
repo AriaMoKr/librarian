@@ -2,8 +2,13 @@
 
 Experiments with an AI librarian in vrlbry's library, in a repository of their own, a fork of
 vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.github.io/librarian/>
-(CLAUDE.md, "Branches and sites"). Nothing here is built yet: these are the proposals, cheapest
-first, each one something to try on its own.
+(CLAUDE.md, "Branches and sites"). These are the proposals, cheapest first, each one something to
+try on its own.
+
+**Built so far** (SPEC §5.10): experiment 1, step 1 of 4, the words in the library card. A
+question becomes a search, then an answer with what it found, and *Take me there* goes to it as
+the search's results do. It works on a desktop (L), a phone and a TV. Steps 2 to 4 are still to
+come: the figure and its panel beside the stand, the walk to the book, and its voice.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,

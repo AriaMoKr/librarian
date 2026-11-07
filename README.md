@@ -23,9 +23,12 @@ The experiments, cheapest first, each one something to try on its own
 5. **A model on the device.** Whether a small language model runs in the browser at all, on a
    desktop and on a Quest.
 
-None of them is built yet. The librarian will always be optional: the library works as it does
-now without it, the page reports nothing about its visitors, and a question goes to a hosted
-model only when you ask one, having chosen to.
+The first is under way, a step at a time. Its words are in: ask the librarian in the library
+card (or press L) for a title, an author or a subject, and *Take me there* goes to what it found.
+The figure at the stand, the walk to the book and its voice come next. The librarian will always
+be optional (the help's *Show the librarian* turns it off): the library works as it does without
+it, the page reports nothing about its visitors, and a question goes to a hosted model only when
+you ask one, having chosen to.
 
 librarian is a fork of [vrlbry](https://github.com/AriaMoKr/vrlbry), a virtual library for your ZIM
 files, and does all that vrlbry does. It finds the `.zim` files in a folder and shelves their
@@ -177,6 +180,7 @@ Then press **Enter VR**.
 | Look | drag the mouse | drag one finger | right stick | turn your head |
 | Move | W A S D / arrows, Q E to turn, Shift to hurry | drag two fingers | left stick (click it to hurry) | right stick forward: teleport arc · flick right stick: snap turn · left stick: walk (or teleport, and turning smoothly: the kiosk, or your choice in the Hallway) |
 | Take a book | click it | tap it | aim the crosshair, **A** | point and pull the trigger (or pinch) |
+| Ask the librarian | **L**, or the box in the card | the box in the card | | |
 | Read | click the book or **Read** | tap **Read** | **A** | trigger on the book, or **A** |
 | Turn pages | ← → Space, or click a page | swipe, or tap a page | bumpers, or D-pad ← → | flick the right stick, or trigger on a page |
 | Text size, theme, contents | + / − · **N** · **C**, or the toolbar | toolbar | D-pad ↑ ↓ · **Y** · **X** | toolbar |

@@ -32,6 +32,7 @@ import { perf } from './perf.js';
 import { copyText, debugReport, startErrorLog, noteError, saveFile, screenshot, screenshotName } from './debug-info.js';
 import { resetStoredData } from './reset.js';
 import { parseScene, restoreScene, saveScene, savedScene } from './scene.js';
+import { startLibrarian } from './librarian/librarian.js';
 
 startErrorLog(); // first: the debug report lists the page's last errors
 const params = new URLSearchParams(location.search);
@@ -301,6 +302,8 @@ async function start() {
     controls.onPadBack = () => remote.padBack();
     renderer.domElement.setAttribute('aria-describedby', 'ov-hint'); // what the remote does now
   }
+  // The librarian (librarian/, SPEC §5.10): its question box in the card, L, its help choice.
+  startLibrarian({ overlay, interaction, tv });
   // The address names the place and room shown (place-url.js), replaced as they change (no history
   // entry per room), so it can be bookmarked, shared or reloaded. Back and Forward can land on an
   // entry from before the last change (a book's, a link's, the page's): its address is put right.

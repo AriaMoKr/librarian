@@ -1,0 +1,53 @@
+/* The librarian (public/js/librarian/; SPEC §5.10): its part of the library card, "Ask the
+   librarian", with its answer and what it found. After style.css, whose tokens it uses. */
+.lb-ask { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.ov-card.collapsed .lb-ask { display: none; }
+.lb-label { display: block; font: 600 16px/1.25 var(--serif); color: var(--accent); }
+.lb-row { display: flex; gap: 6px; margin-top: 6px; }
+.lb-q { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-size: 14px; }
+.lb-q::placeholder { color: var(--muted); }
+/* Focused: the gold border and, as every control, the 2 px outline (input:focus-visible). */
+.lb-q:focus { border-color: var(--accent); }
+.lb-go { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); }
+.lb-go:hover { border-color: var(--accent); }
+.lb-answer { margin: 8px 0 0; font-size: 14px; line-height: 1.4; }
+.lb-answer:empty { margin: 0; }
+.lb-finds { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+/* Each find one button: its picture, its title and line, and "Take me there". */
+.lb-find { display: flex; gap: 10px; align-items: center; width: 100%; padding: 6px 8px; border: 1px solid transparent; border-radius: 10px; background: none; text-align: left; }
+.lb-find:hover { background: rgba(217,178,106,.12); border-color: var(--line); }
+.lb-find img, .lb-nocover { flex: none; width: 34px; height: 48px; object-fit: cover; border-radius: 3px; background: #3a2e22; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+.lb-find img.lb-icon { height: 34px; object-fit: contain; background: none; box-shadow: none; }
+.lb-find-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.lb-find-title { font: 600 14px/1.25 var(--serif); overflow-wrap: anywhere; }
+.lb-find-line { color: var(--muted); font-size: 12px; }
+.lb-find-snip { font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lb-find-snip b { color: var(--accent); font-weight: 600; }
+.lb-find-go { flex: none; color: var(--accent); font-size: 12px; white-space: nowrap; }
+.lb-pref { margin-top: 8px; }
+
+/* With an answer in it the card grows taller than it did without the librarian: it stops above the
+   hint at the foot (style.css keeps it only within the screen), and on a phone held upright above
+   the search field and the buttons, with one scroll, the card's, not one inside it. A short screen
+   keeps style.css's own rule (max-height: 500px), a TV html.tv's. */
+@media (height > 500px) {
+  .ov-card {
+    max-height: calc(100vh - max(12px, env(safe-area-inset-top)) - 48px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 48px - env(safe-area-inset-bottom));
+  }
+}
+@media (height > 500px) and (max-width: 640px) {
+  .ov-card {
+    max-height: calc(100vh - max(12px, env(safe-area-inset-top)) - 128px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - max(12px, env(safe-area-inset-top)) - 128px - env(safe-area-inset-bottom));
+  }
+  .ov-card:has(.lb-ask:not([hidden])) .ov-libs { max-height: none; overflow: visible; }
+}
+
+/* A TV (style.css, html.tv): larger, the find with the focus as the search's result. */
+html.tv .lb-label { font-size: 19px; }
+html.tv :is(.lb-q, .lb-answer, .lb-find-title) { font-size: 18px; }
+html.tv :is(.lb-find-line, .lb-find-snip, .lb-find-go, .lb-go) { font-size: 16px; }
+html.tv .lb-find:focus { background: rgba(217, 178, 106, .34); outline: 4px solid #ffd98a; outline-offset: -4px; box-shadow: none; }
+html.tv .lb-find:focus :is(.lb-find-line, .lb-find-go) { color: var(--text); }
+html.tv .lb-find:focus .lb-find-snip b { color: #ffd98a; }
