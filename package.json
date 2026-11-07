@@ -1,15 +1,15 @@
 {
-  "name": "vrlbry",
+  "name": "librarian",
   "version": "0.2.0",
-  "description": "A candle-lit 3D library for Kiwix ZIM files: walk the shelves and read Project Gutenberg, Wikipedia and Wikisource in VR (Meta Quest), on a desktop or a phone.",
-  "keywords": ["webxr", "virtual-reality", "threejs", "meta-quest", "kiwix", "zim", "openzim", "project-gutenberg", "wikipedia", "wikisource", "ebook-reader", "digital-library", "offline-first"],
-  "homepage": "https://ariamokr.github.io/vrlbry/",
+  "description": "Experiments with a librarian for vrlbry's candle-lit 3D library of Kiwix ZIM files, one who can only find things: ask, and be taken to the book. In VR (Meta Quest), on a desktop or a phone. A fork of vrlbry.",
+  "keywords": ["librarian", "search", "webxr", "virtual-reality", "threejs", "meta-quest", "kiwix", "zim", "openzim", "project-gutenberg", "wikipedia", "wikisource", "ebook-reader", "digital-library", "offline-first"],
+  "homepage": "https://ariamokr.github.io/librarian/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AriaMoKr/vrlbry.git"
+    "url": "git+https://github.com/AriaMoKr/librarian.git"
   },
   "bugs": {
-    "url": "https://github.com/AriaMoKr/vrlbry/issues"
+    "url": "https://github.com/AriaMoKr/librarian/issues"
   },
   "type": "module",
   "private": true,

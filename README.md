@@ -1,16 +1,39 @@
-# vrlbry
+# librarian
 
-A virtual library for your ZIM files. vrlbry finds the `.zim` files in a folder and shelves their
-books in a warm, candle-lit 3D reading room. Walk up to a shelf, pull a book out, look at its
-cover, open it and read it page by page. It works in a VR headset (Meta Quest and other WebXR
-browsers), on a desktop with mouse and keyboard, and on a phone.
+Experiments with a librarian for a virtual library: one who can only find things. Ask, and be
+taken to the book. The model is the Librarian of Neal Stephenson's *Snow Crash*, who finds,
+retrieves and cross-references anything at once, but will not speculate or draw conclusions:
+what the books mean is the reader's to work out.
 
-**Try it in your browser: <https://ariamokr.github.io/vrlbry/>.** There is nothing to install. On a
-Meta Quest, open the address in its browser and choose *Enter VR*. More books come from
-[Kiwix's library](https://library.kiwix.org/), right on the page or on the catalogue stand in VR,
-or from ZIM files on your own device.
+**Try it in your browser: <https://ariamokr.github.io/librarian/>.** There is nothing to install.
+On a Meta Quest, open the address in its browser and choose *Enter VR*.
 
 ![An aisle of the library: Project Gutenberg's 10,000 most-read English books on facing bookcases](docs/screenshots/aisle.jpg)
+
+The experiments, cheapest first, each one something to try on its own
+([docs/LIBRARIAN.md](docs/LIBRARIAN.md) has the plan and its ground rules):
+
+1. **A librarian at the desk, no AI yet.** A figure near the catalogue stand takes a question,
+   answers it with the search the library already has, and leads you to the book.
+2. **"I can only find things": answers with citations.** A language model gets the library as
+   tools, and every statement it makes points to a book and a paragraph, which opens there.
+3. **Cross-references between libraries.** Reading a book, the librarian offers what the other
+   libraries hold about it.
+4. **Voice in VR.** Hold a button, ask, hear the answer.
+5. **A model on the device.** Whether a small language model runs in the browser at all, on a
+   desktop and on a Quest.
+
+None of them is built yet. The librarian will always be optional: the library works as it does
+now without it, the page reports nothing about its visitors, and a question goes to a hosted
+model only when you ask one, having chosen to.
+
+librarian is a fork of [vrlbry](https://github.com/AriaMoKr/vrlbry), a virtual library for your ZIM
+files, and does all that vrlbry does. It finds the `.zim` files in a folder and shelves their
+books in a warm, candle-lit 3D reading room. Walk up to a shelf, pull a book out, look at its
+cover, open it and read it page by page. It works in a VR headset (Meta Quest and other WebXR
+browsers), on a desktop with mouse and keyboard, and on a phone. More books come from
+[Kiwix's library](https://library.kiwix.org/), right on the page or on the catalogue stand in VR,
+or from ZIM files on your own device.
 
 It understands three kinds of [Kiwix ZIM files](https://library.kiwix.org/) especially well:
 
@@ -209,21 +232,21 @@ someone sent you, and restore it: you see what they saw.
 
 ## The online version
 
-<https://ariamokr.github.io/vrlbry/> is the same app as a static website, without the Node server.
-It has a demo set of Kiwix's ZIM files (a Gutenberg collection, Wikipedia 100, and Wikipedia's
-Chemistry, Medicine, Mathematics, Physics and Golf), opens more from Kiwix's library or from your
-device, and notices a new version within seconds and offers to reload. How it is built and
-deployed is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-online-version-github-pages).
+<https://ariamokr.github.io/librarian/> is the same app as a static website, without the Node
+server. It has vrlbry's demo set of Kiwix's ZIM files (a Gutenberg collection, Wikipedia 100, and
+Wikipedia's Chemistry, Medicine, Mathematics, Physics and Golf), opens more from Kiwix's library or
+from your device, and notices a new version within seconds and offers to reload. How it is built
+and deployed is in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#the-online-version-github-pages).
 
 ## The Hallway, or your own
 
-vrlbry is behind one of the doors of the [Hallway](https://ariamokr.github.io/hallway/), a WebXR
-corridor whose doors lead to other places. A door like the Hallway's stands in the library, behind
-where you arrive: through it you see the Hallway, and walking through it (or clicking it, or
-pointing at it and pulling the trigger) takes you back there, to vrlbry's door. So does the
-**← Hallway** link on the library card and on the catalogue stand. On a Meta Quest, walking
-through the door in VR keeps you in VR: Quest Browser hands the session to the next page when both are on one
-origin, as the Hallway and vrlbry are (`ariamokr.github.io`).
+A door like the [Hallway](https://ariamokr.github.io/hallway/)'s stands in the library, behind
+where you arrive: the Hallway is a WebXR corridor whose doors lead to other places. Through the
+door you see the Hallway, and walking through it (or clicking it, or pointing at it and pulling
+the trigger) takes you there. So does the **← Hallway** link on the library card and on the
+catalogue stand. The Hallway has no door for librarian yet, so you arrive at its entrance. On a
+Meta Quest, walking through the door in VR keeps you in VR: Quest Browser hands the session to the
+next page when both are on one origin, as the Hallway and librarian are (`ariamokr.github.io`).
 
 In VR you move and turn as you chose in the Hallway (walking with the stick or teleporting,
 turning in steps or smoothly), and changing it on the catalogue stand changes it there too. So do
@@ -233,16 +256,16 @@ through the Hallway's door in a shared session and you stay in it: the others in
 the library are there with you, as heads, hands and names, the library card says who else is in
 the session, and the way back to the Hallway keeps you in it.
 
-To put vrlbry behind a door of your own hallway, or link to it from anywhere, name your page in
+To put librarian behind a door of your own hallway, or link to it from anywhere, name your page in
 the link and the way out leads back to it instead:
 
 ```
-https://ariamokr.github.io/vrlbry/?back=https%3A%2F%2Fexample.org%2Fhall%2F%3Ffrom%3Dvrlbry&backname=My%20Hall
+https://ariamokr.github.io/librarian/?back=https%3A%2F%2Fexample.org%2Fhall%2F%3Ffrom%3Dlibrarian&backname=My%20Hall
 ```
 
 `back` is your page's address and `backname` its name on the button and on the door (both
 URL-encoded; without a name they show your host). Only `http` and `https` addresses are taken. Between your site
-and vrlbry, a Quest visitor leaves VR and presses Enter VR again, since the two are on different
+and librarian, a Quest visitor leaves VR and presses Enter VR again, since the two are on different
 origins.
 
 ## Developing
