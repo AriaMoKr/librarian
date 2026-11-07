@@ -5,7 +5,7 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 (CLAUDE.md, "Branches and sites"). These are the proposals, cheapest first, each one something to
 try on its own.
 
-**Built so far** (SPEC §5.10): experiment 1, steps 1 and 2 of 4.
+**Built so far** (SPEC §5.10): experiment 1, steps 1 to 3 of 4.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -13,8 +13,15 @@ try on its own.
   near. Clicking or tapping him, or a TV's OK with the dot on him, goes into the card's question
   box. In VR you point at him and pull the trigger, and his panel opens with the stand's keyboard,
   his answer and what he found. He costs 1 draw call, his panel 1 more while it is open.
+- **The walk:** *Take me there* and he goes ahead along a way round what stands in the room (a
+  grid over the floor, made once per room, and A* across it), you follow, eased, and he stands
+  beside the shelf as the book comes out to you. A soft line on the floor shows the way while you
+  go (1 draw call). On a screen the view turns the way you go; in VR your head keeps its own turn,
+  the comfort vignette closes with the speed, a long way's middle is skipped in a blink, and the
+  turn to the shelf is a blink. A click, a tap, Enter, Esc or the trigger is there at once; with
+  less motion it is the cut it was. Later he walks back to the desk.
 
-Steps 3 and 4 are still to come: the walk to the book, and his voice.
+Step 4 is still to come: his voice.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,

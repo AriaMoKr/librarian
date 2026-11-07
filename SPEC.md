@@ -1168,8 +1168,10 @@ public/
     librarian/ask.js     the librarian (§5.10): a question → searches → an answer and its finds (pure).
     librarian/card.js    its part of the library card: the question box, the answer, the finds.
     librarian/figure.js  his figure: simple shapes in one mesh with one material; rayUpright (pointing at him).
-    librarian/desk.js    Desk: the figure beside the stand (place, collider, turning) and, in VR, his panel.
-    librarian/librarian.js  startLibrarian: the card's part and the desk, L, the help's choice, Take me there.
+    librarian/desk.js    Desk: the figure beside the stand (place, collider, turning), in VR his panel, and his walk (takeThere).
+    librarian/path.js    Floor: a room's floor as a grid, ways across it round what stands there (A*); along a way.
+    librarian/walk.js    Walk: where he and the viewer are along a walk (eased, a blink in VR); WayLine, the way on the floor.
+    librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choice.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
 ```
 
@@ -2273,9 +2275,9 @@ The Librarian's experiments (docs/LIBRARIAN.md) are librarian's own; the rest of
 vrlbry's. So their code stays in `librarian/` and `css/librarian.css`, main.js wires them with one
 call (`startLibrarian({ overlay, interaction, tv })`), the overlay gives them two hooks
 (`onRemoteStart`, `addUiPart`) and interaction three (`addPanel`, `addTarget`, `onFrame`: §5.6).
-Built so far, with no model: experiment 1, steps 1 and 2 (2026-11-07), the words in the card and
-the figure beside the stand, with his panel in VR. Still to come in experiment 1: the walk to the
-book, his voice.
+Built so far, with no model: experiment 1, steps 1 to 3 (2026-11-07): the words in the card, the
+figure beside the stand with his panel in VR, and his walk to the book. Still to come in
+experiment 1: his voice.
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
   the stand, or press L)", stored as `vrlbry:librarian` = `{ shown }` and on until unticked.
@@ -2348,12 +2350,15 @@ book, his voice.
     - "Take me there".
   - A newer question drops an older answer still on its way. A failure says "I could not look
     just now." The question and its answer stay until the next question.
-- **Take me there** (`takeThere`) works as the search's results do:
+- **Take me there** without him (`takeThere` in `librarian.js`: the cut) works as the search's
+  results do:
   - a book goes to its shelf and comes out (`searchPick(book, { take: true })`);
   - an article opens its volume there (`openArticle`);
   - a hit opens its book at its block (`openText`).
 
-  The button gives up the focus first, so the book's keys go to the view.
+  The button gives up the focus first, so the book's keys go to the view. With him shown, the
+  card's and the panel's Take me there go through `Desk.takeThere`: he leads the way (The walk,
+  below), then this.
 - **Focus.** Where the focus goes after an answer to a question asked from the card:
   - on a TV, to the first find, so OK takes you there;
   - on a touch screen, off the box, so the keyboard goes down and the answer can be seen;
@@ -2398,10 +2403,56 @@ book, his voice.
     answer), so the two always say the same. Opening the panel takes the card's question and
     answer.
   - The answer (up to 3 lines), then the finds as a list: title, line, "Take me there", which
-    closes the panel and goes there (`takeThere`).
+    closes the panel, and he leads the way there (`Desk.takeThere`).
   - It closes with ✕, choosing him again, on leaving VR, on a rebuild and when he is hidden. It
     is drawn again only when its words change (the panel's `dirty`): 1 draw call while open, per
     eye.
+- **The walk** (`Desk.takeThere`, step 3). He leads the viewer to the spot the cut would put them
+  before the find's shelf (`shelves.locate`), and the find comes out there as without him.
+  - **When.** With him shown, motion not reduced, the find's book on the shelves here (after
+    `ensureShelved`, which may build another room first) and a way there of 0.8 m or more. A book
+    in hand or open is put back first. Otherwise it is the cut.
+  - **The floor** (`path.js`, `Floor`): a grid of 25 cm cells over the room (coarser past 160,000
+    cells), made at the room's first walk and kept for the room (perf event `librarian-floor`). A
+    cell is open when the room's `walkable` holds at its middle and 0.25 m beyond it either way,
+    and it is 0.4 m clear of the room's colliders (the furniture's; not his own) and of the
+    bookcases' footprints (`shelves.footprints()`, as `_collides` turns them).
+  - **A way** (`Floor.path`): A* over the open cells (8 neighbours, no corner cut), from the
+    viewer's feet to the spot, then straightened wherever a straight line stays on open cells
+    (perf event `librarian-way`). It can keep round a circle (the viewer, on his own ways).
+  - **He** first comes to his place 1.3 m ahead of the viewer on their way, round them, at 2 m/s,
+    while they wait (from over 4 m away he is put there). Then both go: the viewer along the way,
+    eased in and out, he along his own way (theirs from his place, then to a spot beside its end,
+    `besideEnd`: 0.9 m to the side with room, the side he comes from first) as far as they have
+    come and a little further, so he keeps ahead and arrives first. There he faces the shelf, then
+    turns to the viewer. He walks with a small bob.
+  - **How fast.** The viewer's speed is the way's length over 4.5 s, held to 2.4–6 m/s on a screen
+    and 1.6–2.6 m/s in VR, reached and left at 2.6 or 1.8 m/s² (`walk.js`, `WALK`).
+  - **On a screen** the view looks the way they go (turning at most 2.2 rad/s), turns to the
+    shelf over the last 1.5 m, and levels; dragging does not turn it meanwhile.
+  - **In VR** the head's own place and turn are kept: the rig moves by what the way moves. The
+    comfort vignette closes with the speed (`speed / VIGNETTE.fullSpeed`) when it is on. A way
+    over 14 m skips its middle in a blink (dark in 0.15 s, across, light in 0.25 s): only its
+    first 3 m and last 6 m are walked. The turn to the shelf at the end is a blink too (0.12 s,
+    the take, 0.2 s), as the room's own steps back are.
+  - **The way on the floor** (`WayLine`): a soft gold line along it, 11 cm wide, clear at its edges
+    and ends, over the floor and under what stands on it. It is made once per walk, fades in over
+    0.35 s and out over 0.6 s from the walk's end, and is 1 draw call while shown.
+  - **Meanwhile** the room's state is `busy`, so nothing else is picked or opened, and walking and
+    teleporting are off; on a screen so is looking round. The card, the search and the hint fade
+    (`#overlay.lb-walking`, as while reading: a phone's card would hide the walk) until the find
+    is out.
+  - **There at once:** a click, a tap, the trigger or a gamepad's A (controls' `select`); Enter or
+    Esc (a `document` listener in the capture phase, so the keys go no further); a TV's OK (Enter,
+    after common's Remote has had it). In VR it is a blink. Hiding him also ends it at once. A
+    rebuild under it (a new `world.room`) stops it: no find, the controls given back, the state
+    left to the rebuild.
+  - **Back to the desk:** once the viewer is 3.5 m from him or has browsed 20 s, he walks back at
+    1.4 m/s, keeping 0.8 m from the viewer's middle. With less motion, or with no way, he is put
+    back at once.
+  - **Costs.** The line is 1 draw call while walking. The floor and a way are made only for a walk
+    (or a walk back), and nothing done each frame makes an object.
+  - `interaction.librarian` is `{ card, desk }`, for the console and scripted checks.
 - **TV** (§5.9). The help has a row for the librarian on each kind of screen.
   - OK with the dot on him (`useMiddle`) puts the focus in the card's box, held
     (`inputmode="none"`) until OK.
@@ -2409,11 +2460,12 @@ book, his voice.
     the card collapsed, Menu lands where it did without the librarian.
   - ↑ from Ask goes to the box, which is held (`inputmode="none"`) until OK.
   - The keyboard's search key asks.
-  - ↓ goes through the finds, and OK on one takes you there; the remote then walks again.
+  - ↓ goes through the finds, and OK on one takes you there; the remote then walks again. OK while
+    he leads the way is there at once.
 - **Layout** (`css/librarian.css`). With an answer the card can grow taller than before, so it
   stops above the hint at the foot. On a phone held upright it stops above the search field, with
   one scroll: the library list's own scroll goes (`:has`). A short screen and a TV keep their own
-  rules.
+  rules. While he leads the way the card, the search and the hint fade (`#overlay.lb-walking`).
 - **Scenes** (`overlay.addUiPart('librarian', …)`): the question and the answer shown are kept
   as `ui.page.librarian = { q, answer }`, with `panel: true` while his panel is open. When a scene
   is restored, a question that had an answer is asked again, and in a headset the panel opens
@@ -2433,7 +2485,20 @@ book, his voice.
   - choosing him on a screen and in a headset;
   - where the panel opens, its keys, Ask through the card, "Looking…", the answer and the finds,
     Take me there;
-  - his turning: eased, limited, not to someone behind him or far off, not with less motion.
+  - his turning: eased, limited, not to someone behind him or far off, not with less motion;
+  - his walk: the book a find is in; on a screen, he ahead, the view eased along and turned to the
+    shelf, level, the controls given back, he beside it and then facing the viewer, the line gone,
+    the card faded and back; round furniture; a click; in VR, the vignette with the speed, the
+    head's own place and turn kept, the blinks (a long way's middle, the end, a click); less
+    motion and him hidden (the cut); a rebuild under it; the walk back, round the viewer.
+
+  `test/client-librarian-walk.test.js` covers `path.js` and `walk.js`:
+  - the floor: open and closed cells, a footprint exactly, a coarser grid for a large room;
+  - ways: straight, round a table, round a row of bookcases, from beside a bookcase, round a
+    circle, none; `along`;
+  - the eased move, and a walk: he joins, keeps ahead and arrives first, the speeds, the blink in
+    VR, at once to the end;
+  - his place beside the shelf, his way there, and the line.
 
   Checked in headless Chrome with real keys and taps against the demo set (2026-11-07):
   - On a desktop, L put the focus in the box. "What is insulin?" found 5 articles, Insulin first,
@@ -2457,4 +2522,22 @@ book, his voice.
     typed on its keys and Ask found 5 articles, and Take me there opened the volume and closed
     the panel. Leaving VR closed it too. Draw calls at one pose, both eyes: 56 with the panel
     closed, 58 open, 54 with him hidden.
+  - axe: as for step 1.
+
+  Step 3, the same way (2026-11-07), "insulin" asked and the Insulin article's Take me there:
+  - On a desktop (`?perf`), he came to his place ahead in 0.6 s and the viewer followed 3.3 m in
+    2.2 s, the view turning to the shelf; the line showed and faded, the card faded, and the
+    volume opened at Insulin. Escape, Enter and a click on the view were each there at once. With
+    less motion it was the cut. Draw calls: 27, 28 with the line. Planning on the PC: the floor
+    (961 cells) 0.9–1.7 ms at a page's first walk, a way 1–2 ms then and 0.1–0.5 ms after. A
+    sampled heap profile of a walk, once warm, found only the planning's arrays allocated in
+    `librarian/`.
+  - The largest hall (200 bookcases: 10,850 cells), in Node on the PC: the floor 2.9 ms the first
+    time and 0.3 ms once warm, a 40 m way 2.3 ms and 0.4 ms. Not yet measured on a Quest.
+  - On a phone a tap on a find walked with the card faded, and a tap on the view was there at
+    once.
+  - On a TV, OK on a find walked with the focus on the view, and OK again was there at once.
+  - In VR his panel's Take me there walked: the vignette closed to 0.89 (1.6 m/s of 1.8), the turn
+    to the shelf was a blink, and the volume opened. Draw calls at one pose, both eyes: 34, 36
+    with the line.
   - axe: as for step 1.

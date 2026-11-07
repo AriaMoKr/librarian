@@ -25,6 +25,9 @@
 .lb-find-snip b { color: var(--accent); font-weight: 600; }
 .lb-find-go { flex: none; color: var(--accent); font-size: 12px; white-space: nowrap; }
 .lb-pref { margin-top: 8px; }
+/* While he leads the way (desk.js) the card, the search and the hint fade, as style.css has them
+   while reading: a phone's card would hide the walk, and a click or tap anywhere is there at once. */
+#overlay.lb-walking :is(.ov-card, .ov-search, .ov-hint) { opacity: 0; pointer-events: none !important; }
 
 /* With an answer in it the card grows taller than it did without the librarian: it stops above the
    hint at the foot (style.css keeps it only within the screen), and on a phone held upright above

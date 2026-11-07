@@ -1,8 +1,10 @@
 // The librarian at the desk (public/js/librarian/desk.js and figure.js, SPEC §5.10): his figure,
 // where he stands by the catalogue stand and his collider there, how a pointer finds him, a click on
 // a screen against the trigger in a headset, his panel (its keyboard, the question asked through
-// the card, the answer and its finds, Take me there) and his turning towards a viewer. In Node, on
-// a stand-in for the room (interaction.js) and a stub canvas for common's Panel.
+// the card, the answer and its finds, Take me there), his turning towards a viewer, and his walk to
+// a shelf (he ahead, the viewer following; the vignette and the blinks in a headset; skipped at
+// once; the cut it was with less motion; his way back to the desk). In Node, on a stand-in for the
+// room (interaction.js) and a stub canvas for common's Panel.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -12,32 +14,73 @@ import './helpers/vendor.js'; // desk.js's ../../vendor/common/panel.js
 globalThis.document ??= /** @type {any} */ ({
   createElement: () => ({ width: 0, height: 0, style: {}, getContext: () => new Proxy({}, { get: () => () => ({ width: 0 }) }) }),
 });
-const { Desk } = await import('../public/js/librarian/desk.js');
+const { bookOf, Desk } = await import('../public/js/librarian/desk.js');
 const { Figure, FIGURE, figureGeometry, rayUpright } = await import('../public/js/librarian/figure.js');
+const { VIGNETTE } = await import('../public/vendor/common/access.js');
 
-/** A rotunda's spawn point and stand (world.js _layoutRotunda, R 3.8), and a stand-in for the room. */
-function room({ presenting = false } = {}) {
-  const spawn = new THREE.Vector3(0, 0, 1.33);
-  const kp = new THREE.Vector3(1.368, 0, -0.07);
+/** Lets promises settle (the walk's start and end, the fades). */
+const flush = () => new Promise((r) => setImmediate(r));
+
+/** A bookcase's footprint and the spot before it (shelves.js footprints, locate: 1.3 m before its front, facing it). */
+const bookcase = (x, z, yaw) => ({ position: { x, z }, yaw, halfW: 0.65, halfD: 0.23 });
+const spotBefore = (b) => ({ position: new THREE.Vector3(b.position.x + 1.5 * Math.sin(b.yaw), 0, b.position.z + 1.5 * Math.cos(b.yaw)), yaw: b.yaw });
+
+/**
+ * A stand-in for the room: by default a rotunda's spawn point and stand (world.js _layoutRotunda,
+ * R 3.8) with eight bookcases round its far wall; `hall`: a long hall (_layoutHall) with a row of
+ * them at its far end. Its controls are an EventTarget (select) with a rig holding the camera.
+ */
+function room({ presenting = false, hall = false, furniture = [] } = {}) {
+  const spawn = hall ? new THREE.Vector3(0, 0, 3.1) : new THREE.Vector3(0, 0, 1.33);
+  const kp = hall ? new THREE.Vector3(1.3, 0, 1.9) : new THREE.Vector3(1.368, 0, -0.07);
+  const R = 3.8;
+  /** @type {any[]} */
+  const cases = [];
+  if (hall) {
+    for (let k = 0; k < 5; k++) cases.push(bookcase(-2.48 + k * 1.24, -24.8, 0));
+  } else {
+    const da = 1.24 / 3.56;
+    for (let i = 0; i < 8; i++) {
+      const a = (i - 3.5) * da;
+      cases.push(bookcase(Math.sin(a) * 3.56, -Math.cos(a) * 3.56, -a));
+    }
+  }
+  const margin = 0.35;
   const world = {
-    room: { colliders: [] },
+    room: hall
+      ? { kind: 'hall', bounds: { minX: -6, maxX: 6, minZ: -28, maxZ: 4.5 }, colliders: [...furniture], walkable: (x, z) => Math.abs(x) < 6 - margin && z > -28 + margin && z < 4.5 - margin }
+      : { kind: 'rotunda', R, colliders: [...furniture], walkable: (x, z) => Math.hypot(x, z) < R - 0.45 },
     spawn: { position: spawn, yaw: 0 },
     kiosk: { position: kp, yaw: Math.atan2(spawn.x - kp.x, spawn.z - kp.z) },
+    /** A book is on the bookcase its `onCase` names. */
+    shelves: { locate: (book) => (book.onCase == null ? null : spotBefore(cases[book.onCase])), footprints: () => cases },
   };
   const scene = new THREE.Scene();
+  const rig = new THREE.Group();
   const camera = new THREE.PerspectiveCamera();
-  scene.add(camera);
+  rig.add(camera);
+  scene.add(rig);
   const panels = [];
   const targets = [];
   const frames = [];
+  const log = [];
+  const controls = Object.assign(new EventTarget(), {
+    presenting, rig, yaw: 0, pitch: 0.3, locomotionEnabled: true, lookEnabled: true,
+    vignette: { enabled: true, values: [], set(v) { this.values.push(v); } },
+    viewerPosition: (out) => camera.getWorldPosition(out).setY(rig.position.y),
+  });
   const ia = {
-    scene, world, camera, controls: { presenting }, reduced: false,
+    scene, world, camera, controls, reduced: false, state: 'browse', booksByLib: {},
     addPanel: (p) => panels.push(p), addTarget: (t) => targets.push(t), onFrame: (fn) => frames.push(fn),
+    ensureShelved: async (book) => book.onCase != null,
+    putBack: async () => { ia.state = 'browse'; },
+    _fadeTo: async (target, duration) => { log.push(['fade', target, duration]); },
   };
-  /** The viewer's eyes at (x, z). */
+  /** The viewer's eyes at (x, z): the rig there, the camera in it. */
   const eyesAt = (x, z, y = 1.6) => {
-    camera.position.set(x, y, z);
-    camera.updateMatrixWorld(true);
+    rig.position.set(x, 0, z);
+    camera.position.set(0, y, 0);
+    rig.updateMatrixWorld(true);
   };
   eyesAt(spawn.x, spawn.z);
   const asked = [];
@@ -47,12 +90,20 @@ function room({ presenting = false } = {}) {
   };
   const calls = { box: 0, taken: [] };
   const desk = new Desk({
-    interaction: ia, card, take: (find) => calls.taken.push(find), multi: () => false, intoBox: () => { calls.box++; },
+    interaction: ia, card, multi: () => false, intoBox: () => { calls.box++; },
+    take: (find) => {
+      calls.taken.push(find);
+      log.push(['take', find.book.title]);
+    },
+    onWalk: (on) => log.push(['walk', on]),
   });
   const frame = (dt = 1 / 72, n = 1) => {
     for (let i = 0; i < n; i++) for (const fn of frames) fn(dt);
   };
-  return { ia, world, camera, eyesAt, panels, targets, frame, card, asked, calls, desk };
+  /** A find of a book on bookcase `i`, and where the viewer will stand for it. */
+  const findOn = (i, title = `Book ${i}`) => ({ kind: 'book', book: { id: String(i), title, onCase: i }, lib: { id: 'pg', title: 'Gutenberg' } });
+  const viewer = () => controls.viewerPosition(new THREE.Vector3());
+  return { ia, world, cases, camera, rig, controls, eyesAt, panels, targets, frame, card, asked, calls, desk, log, findOn, viewer };
 }
 
 /** A ray from `from` towards `to`. */
@@ -175,7 +226,7 @@ describe('the librarian: at the desk', () => {
     assert.ok(front.setY(0).normalize().dot(toEye) > 0.99);
   });
 
-  it('asks from his panel through the card, says the answer and lists its finds, each a way there', () => {
+  it('asks from his panel through the card, says the answer and lists its finds, each a way there', async () => {
     const { desk, card, asked, calls } = room({ presenting: true });
     card.input.value = 'emma';
     desk.open();
@@ -212,7 +263,8 @@ describe('the librarian: at the desk', () => {
     assert.deepEqual({ label: items[0].label, sub: items[0].sub, right: items[0].right }, { label: 'Emma', sub: 'Jane Austen', right: 'Take me there' });
     items[0].onClick();
     assert.equal(p.visible, false, 'the panel goes as he takes you there');
-    assert.deepEqual(calls.taken, [emma]);
+    await flush();
+    assert.deepEqual(calls.taken, [emma], 'not on a shelf here: taken without a walk');
     // Opened again: the conversation where it was.
     desk.open();
     assert.equal(p.get('answer').text, 'I have Emma, by Jane Austen.');
@@ -246,5 +298,233 @@ describe('the librarian: at the desk', () => {
     frame(1 / 72, 50);
     assert.equal(desk.yaw, desk.home);
     assert.equal(desk.figure.mesh.rotation.y, desk.home);
+  });
+});
+
+/** Frames, the promises let settle after each, while he leads the way (at most `max` s): their count. */
+async function walkOut(r, each = () => {}, max = 20) {
+  let n = 0;
+  while (r.desk.walking && n < max * 72) {
+    r.frame();
+    n++;
+    each(n);
+    await flush();
+  }
+  return n;
+}
+
+const flat = (v) => ({ x: v.x, z: v.z });
+const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+
+describe('the librarian: his walk', () => {
+  it('knows the book a find is in: the book, an article\'s volume, a passage\'s book', () => {
+    const books = { wp: [{ id: 'v1' }], ws: [{ id: 'b2' }] };
+    const book = { id: '3' };
+    assert.equal(bookOf({ kind: 'book', book, lib: { id: 'pg' } }, books), book);
+    assert.equal(bookOf({ kind: 'article', article: { book: 'v1', n: 4 }, lib: { id: 'wp' } }, books), books.wp[0]);
+    assert.equal(bookOf({ kind: 'text', hit: { to: { book: 'b2' } }, lib: { id: 'ws' } }, books), books.ws[0]);
+    assert.equal(bookOf({ kind: 'article', article: { book: 'v9', n: 0 }, lib: { id: 'wp' } }, books), null);
+  });
+
+  it('leads the way to the shelf on a screen: he ahead, the view eased along and turned to it, then the book comes out', async () => {
+    const r = room();
+    const { desk, ia, controls, calls, log } = r;
+    const find = r.findOn(3, 'Emma');
+    const to = spotBefore(r.cases[3]);
+    const start = r.viewer();
+    const taking = desk.takeThere(find);
+    await flush();
+    assert.equal(desk.walking, true);
+    assert.equal(ia.state, 'busy', 'nothing else picked or opened meanwhile');
+    assert.equal(controls.locomotionEnabled, false);
+    assert.equal(controls.lookEnabled, false, 'the walk turns the view');
+    assert.equal(desk.line.mesh.visible, true, 'the way on the floor');
+    assert.deepEqual(calls.taken, []);
+    assert.deepEqual(log, [['walk', true]], 'the card fading');
+    const moves = [];
+    let last = r.viewer();
+    let ahead = 0;
+    await walkOut(r, () => {
+      const v = r.viewer();
+      moves.push(dist(v, last));
+      last = v;
+      // Once the viewer is under way, he is nearer the shelf than they are, until they are almost there.
+      if (dist(v, start) > 0.3 && dist(v, to.position) > 1.5) {
+        assert.ok(dist(desk, to.position) < dist(v, to.position), 'he goes ahead');
+        ahead++;
+      }
+    });
+    await taking;
+    assert.ok(ahead > 20, `${ahead} frames with him ahead`);
+    assert.deepEqual(calls.taken, [find]);
+    assert.deepEqual(log, [['walk', true], ['take', 'Emma'], ['walk', false]], 'no fades on a screen; the card back once the book is out');
+    assert.ok(dist(r.viewer(), to.position) < 1e-6, 'standing where the cut would put them');
+    assert.ok(Math.abs(controls.yaw - to.yaw) < 0.05, `facing the shelf: ${controls.yaw} for ${to.yaw}`);
+    assert.equal(r.rig.rotation.y, controls.yaw);
+    assert.ok(Math.abs(controls.pitch) < 0.02, 'level');
+    const moving = moves.filter((m) => m > 0);
+    assert.ok(moving[0] < 0.01 && moving.at(-1) < 0.01, 'eased in and out');
+    assert.ok(Math.max(...moves) <= 6 / 72 + 1e-9);
+    assert.equal(ia.state, 'browse');
+    assert.equal(controls.locomotionEnabled, true);
+    assert.equal(controls.lookEnabled, true);
+    // He stands beside it, facing the shelf, then turns to the viewer (some 110°); the way fades.
+    const d = dist(desk, to.position);
+    assert.ok(d > 0.8 && d < 1.4, `${d} m beside them`);
+    assert.equal(desk.away, true);
+    r.frame(1 / 72, 144);
+    const toViewer = Math.atan2(to.position.x - desk.x, to.position.z - desk.z);
+    assert.ok(Math.cos(desk.yaw - toViewer) > 0.95, 'facing them');
+    assert.equal(desk.line.mesh.visible, false);
+  });
+
+  it('goes round furniture in the way', async () => {
+    const table = { type: 'circle', x: -0.2, z: -0.4, r: 0.6, h: 0.8 };
+    const r = room({ furniture: [table] });
+    const to = spotBefore(r.cases[3]);
+    const taking = r.desk.takeThere(r.findOn(3));
+    await flush();
+    let nearest = Infinity;
+    await walkOut(r, () => {
+      nearest = Math.min(nearest, dist(r.viewer(), table));
+    });
+    await taking;
+    assert.ok(nearest > 0.6 + 0.4 - 0.2, `${nearest} m from the table's middle`);
+    assert.ok(dist(r.viewer(), to.position) < 1e-6);
+    assert.equal(r.calls.taken.length, 1);
+  });
+
+  it('is there at once on a click', async () => {
+    const r = room();
+    const to = spotBefore(r.cases[5]);
+    const taking = r.desk.takeThere(r.findOn(5));
+    await flush();
+    r.frame(1 / 72, 20);
+    assert.equal(r.calls.taken.length, 0);
+    r.controls.dispatchEvent(new CustomEvent('select', { detail: {} }));
+    r.frame();
+    await flush();
+    await taking;
+    assert.equal(r.calls.taken.length, 1);
+    assert.ok(dist(r.viewer(), to.position) < 1e-6);
+    assert.equal(r.desk.walking, false);
+  });
+
+  it('closes the comfort vignette with the speed in a headset, keeps the head\'s own place and turn, and turns to the shelf in a blink', async () => {
+    const r = room({ presenting: true });
+    const { desk, controls, log } = r;
+    r.camera.position.set(0.2, 1.6, -0.1); // the head off the rig's middle
+    r.rig.updateMatrixWorld(true);
+    const to = spotBefore(r.cases[3]);
+    const taking = desk.takeThere(r.findOn(3, 'Emma'));
+    await flush();
+    assert.equal(controls.lookEnabled, true, 'a headset\'s view is the head\'s');
+    await walkOut(r);
+    await taking;
+    const v = controls.vignette.values;
+    assert.ok(v.length > 50);
+    assert.ok(Math.max(...v) <= 1 && Math.max(...v) > 0.8, `up to ${Math.max(...v)}`);
+    assert.ok(Math.abs(Math.max(...v) - 1.6 / VIGNETTE.fullSpeed) < 0.01, 'a short way: at 1.6 m/s');
+    assert.equal(v.at(-1), 0, 'open at a stop');
+    assert.ok(dist(r.viewer(), to.position) < 1e-6, 'the eyes where the cut would put them');
+    assert.equal(r.rig.rotation.y, 0, 'not turned');
+    assert.deepEqual(log, [['walk', true], ['fade', 1, 0.12], ['take', 'Emma'], ['fade', 0, 0.2], ['walk', false]]);
+  });
+
+  it('skips a long way\'s middle in a blink in a headset, and a click is there in a blink too', async () => {
+    const r = room({ presenting: true, hall: true });
+    const to = spotBefore(r.cases[2]);
+    let taking = r.desk.takeThere(r.findOn(2, 'Far'));
+    await flush();
+    let last = r.viewer();
+    const jumps = [];
+    await walkOut(r, () => {
+      const v = r.viewer();
+      if (dist(v, last) > 1) jumps.push(dist(v, last));
+      last = v;
+    });
+    await taking;
+    assert.equal(jumps.length, 1, 'across the middle once');
+    assert.ok(Math.abs(jumps[0] - (dist(r.world.spawn.position, to.position) - 3 - 6)) < 0.1, `${jumps[0]} m skipped`);
+    assert.deepEqual(r.log, [['walk', true], ['fade', 1, 0.15], ['fade', 0, 0.25], ['fade', 1, 0.12], ['take', 'Far'], ['fade', 0, 0.2], ['walk', false]]);
+    // Again from the start, and a click: dark, there, the book.
+    r.log.length = 0;
+    r.eyesAt(r.world.spawn.position.x, r.world.spawn.position.z);
+    r.desk._toDesk();
+    taking = r.desk.takeThere(r.findOn(2, 'Far'));
+    await flush();
+    r.frame(1 / 72, 30);
+    r.controls.dispatchEvent(new CustomEvent('select', { detail: {} }));
+    await walkOut(r);
+    await taking;
+    assert.deepEqual(r.log, [['walk', true], ['fade', 1, 0.15], ['fade', 1, 0.12], ['take', 'Far'], ['fade', 0, 0.2], ['walk', false]]);
+    assert.ok(dist(r.viewer(), to.position) < 1e-6);
+  });
+
+  it('is the cut it was with less motion or with him hidden; hidden while walking, it ends at once', async () => {
+    const r = room();
+    r.ia.reduced = true;
+    r.desk.takeThere(r.findOn(3));
+    assert.equal(r.calls.taken.length, 1, 'at once');
+    assert.equal(r.desk.walking, false);
+    r.ia.reduced = false;
+    r.desk.setShown(false);
+    r.desk.takeThere(r.findOn(3));
+    assert.equal(r.calls.taken.length, 2);
+    assert.equal(r.desk.walking, false);
+    r.desk.setShown(true);
+    const taking = r.desk.takeThere(r.findOn(4));
+    await flush();
+    r.frame(1 / 72, 20);
+    assert.equal(r.desk.walking, true);
+    r.desk.setShown(false);
+    r.frame();
+    await flush();
+    await taking;
+    assert.equal(r.calls.taken.length, 3);
+    assert.ok(dist(r.viewer(), spotBefore(r.cases[4]).position) < 1e-6);
+    r.desk.setShown(true);
+    assert.deepEqual(flat(r.desk), { x: r.desk.deskX, z: r.desk.deskZ }, 'shown again at the desk');
+  });
+
+  it('stops where it is when the room is built again under it: no book, the controls given back', async () => {
+    const r = room();
+    const taking = r.desk.takeThere(r.findOn(3));
+    await flush();
+    r.frame(1 / 72, 40);
+    r.world.room = { colliders: [], walkable: () => true, R: 5 };
+    r.frame();
+    await flush();
+    await taking;
+    assert.deepEqual(r.calls.taken, []);
+    assert.deepEqual(r.log, [['walk', true], ['walk', false]], 'the card back');
+    assert.equal(r.desk.walking, false);
+    assert.equal(r.controls.locomotionEnabled, true);
+    assert.equal(r.ia.state, 'busy', 'the rebuild\'s to give back');
+    assert.deepEqual(flat(r.desk), { x: r.desk.deskX, z: r.desk.deskZ });
+  });
+
+  it('walks back to the desk once the viewer has gone on, round them', async () => {
+    const r = room();
+    const taking = r.desk.takeThere(r.findOn(3));
+    await flush();
+    await walkOut(r);
+    await taking;
+    assert.equal(r.desk.away, true);
+    // The book read and put back, a while on the same spot: he goes back, at his pace.
+    let last = flat(r.desk);
+    let nearest = Infinity;
+    let frames = 0;
+    while (r.desk.away && frames < 72 * 40) {
+      r.frame();
+      frames++;
+      assert.ok(dist(r.desk, last) < 1.5 / 72, 'walking, not put there');
+      last = flat(r.desk);
+      nearest = Math.min(nearest, dist(r.desk, r.viewer()));
+    }
+    assert.ok(frames > 20 * 72, 'after a while');
+    assert.equal(r.desk.away, false);
+    assert.deepEqual(flat(r.desk), { x: r.desk.deskX, z: r.desk.deskZ });
+    assert.ok(nearest > 0.6, `${nearest} m from the viewer at most`);
   });
 });

@@ -2,13 +2,15 @@
 // The librarian (docs/LIBRARIAN.md; SPEC §5.10) in the page:
 // - his part of the library card (card.js), answering through ask.js with the search box's own
 //   searches (search.js);
-// - his figure beside the catalogue stand, and in VR his panel (desk.js);
+// - his figure beside the catalogue stand, in VR his panel, and his walk to what he found, which
+//   the card's "Take me there" goes through too (desk.js);
 // - his choice in the help dialog, "Show the librarian", kept under `librarian` in this site's
 //   storage (without him the library is as it was);
-// - the L key, and on a screen the figure, which put you in his question box;
+// - the L key, and on a screen the figure, which put you in his question box; Enter or Esc while
+//   he leads the way, which is there at once;
 // - on a TV, Menu landing on his Ask;
 // - his question in the page's state (debug reports, scenes).
-// Experiment 1: step 1, the words in the card; step 2, the figure and his panel.
+// Experiment 1: step 1, the words in the card; step 2, the figure and his panel; step 3, the walk.
 
 import { bookIndex, findArticles, findInText } from '../search.js';
 import { load, save } from '../util/storage.js';
@@ -65,7 +67,8 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
         findInText: (q) => findInText(libraries, q, MAX_FINDS + 1),
       });
     },
-    take,
+    // With him: he leads the way there (made below; the card's buttons are pressed only after).
+    take: (find) => desk.takeThere(find),
     multi,
     tv,
   });
@@ -99,7 +102,12 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     window.addEventListener('click', go, true);
     timer = window.setTimeout(go, 400);
   };
-  const desk = new Desk({ interaction, card, take, multi, intoBox });
+  // While he leads the way the card, the search and the hint fade, as while reading (librarian.css):
+  // on a phone the card would hide the walk, and a click or tap anywhere is there at once.
+  const onWalk = (/** @type {boolean} */ on) => overlay.root.classList.toggle('lb-walking', on);
+  const desk = new Desk({ interaction, card, take, multi, intoBox, onWalk });
+  // For the console and scripted checks: __vrlbry.interaction.librarian.
+  interaction.librarian = { card, desk };
   // Out of VR his panel goes: on a screen the card is his.
   interaction.renderer?.xr?.addEventListener?.('sessionend', () => desk.close());
 
@@ -132,6 +140,14 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     e.preventDefault();
     intoBox();
   });
+  // While he leads the way: Enter, Esc or a TV's OK (Enter, after common's Remote has had it) is
+  // there at once, as a click is (desk.js), and goes no further: the view's keys wait for the book.
+  document.addEventListener('keydown', (e) => {
+    if (!desk.walking || (e.key !== 'Enter' && e.key !== 'Escape') || e.ctrlKey || e.metaKey || e.altKey || typing(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.repeat) desk.skipWalk();
+  }, true);
   // A TV's Menu with no book out: on Ask, where its question box is one ↑ away.
   overlay.onRemoteStart?.(() => card.startStop());
   // The question, its answer and his panel in the page's state: debug reports and scenes
