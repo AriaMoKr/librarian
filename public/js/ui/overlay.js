@@ -63,7 +63,7 @@ const HELP = {
     ['Book out of sight', 'F, or “Bring the book in front of me” below'],
     ['Back to the start', 'Home, or “Reset view” below'],
     ['Search', 'The box at the top, or type on the catalogue stand’s Search tab (Esc to stop typing)'],
-    ['Ask the librarian', 'L, or the box in the card: a title, an author or a subject · “Take me there” goes to what it found'],
+    ['Ask the librarian', 'L, click him beside the catalogue stand, or the box in the card: a title, an author or a subject · “Take me there” goes to what it found'],
   ],
   touch: [
     ['Look around', 'Drag with one finger'],
@@ -74,7 +74,7 @@ const HELP = {
     ['Text view', '“Text view” at the foot while reading: the part as a page of text'],
     ['Put it back', 'Tap “Put back”'],
     ['Book out of sight', '“Bring the book in front of me” below'],
-    ['Ask the librarian', 'The box in the card: a title, an author or a subject · tap what it found to go there'],
+    ['Ask the librarian', 'Tap him beside the catalogue stand, or the box in the card: a title, an author or a subject · tap what it found to go there'],
   ],
   gamepad: [
     ['Look around', 'Right stick'],
@@ -85,13 +85,14 @@ const HELP = {
     ['Book distance', 'Triggers'],
     ['Put it back', 'B'],
     ['Book out of sight', 'Press the right stick'],
+    ['Ask the librarian', 'Aim the crosshair at him beside the catalogue stand, press A: the box in the card'],
   ],
   tv: [
     ['Walk', '↑ ↓ · turn with ← →'],
     ['Take a book', 'Turn until the dot is on it, then OK'],
     ['Read', 'OK · turn the pages with ← →'],
     ['The card', 'Menu: this card, on the librarian’s Ask first (else on this button), and with a book out its buttons (contents, text view, theme, pages, text size) · ↑ ↓ from one to the next, ← → through a choice, OK presses'],
-    ['The librarian', '↑ from Ask to its box, OK to type with the keyboard, its search key asks · ↓ through what it found, OK takes you there'],
+    ['The librarian', 'OK with the dot on him beside the stand, or ↑ from Ask: his box, OK to type with the keyboard, its search key asks · ↓ through what it found, OK takes you there'],
     ['Search', '↑ from this button to the box, OK to type with the keyboard · ↓ through the results, OK opens one · Back: the box again'],
     ['A list on the stand', 'Walk up to the stand, the dot on the list: ↑ ↓ scroll it, OK chooses'],
     ['The text view', '↑ ↓ scroll it, ← → turn the pages · OK: the links on the screen · Menu: its toolbar'],
@@ -107,6 +108,7 @@ const HELP = {
     ['Close / put back', 'B or Y button'],
     ['Book out of sight', 'Press a thumbstick: it comes in front of you'],
     ['Leave VR', 'Hold B or Y for a second while browsing, or “Exit VR” on the catalogue stand'],
+    ['Ask the librarian', 'Point at him beside the catalogue stand, pull the trigger: type on his panel, Ask · “Take me there” goes to what it found'],
   ],
 };
 

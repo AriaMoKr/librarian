@@ -8,8 +8,10 @@ import { describe, it } from 'node:test';
 import { bookIndex } from '../public/js/search.js';
 import { ask, findLines, MAX_FINDS, parseQuestion, PROMPT, searchesFor } from '../public/js/librarian/ask.js';
 import { findList } from '../public/js/librarian/card.js';
-import { takeThere } from '../public/js/librarian/librarian.js';
 import { fakeDocument, inner, markup } from './helpers/fake-dom.js';
+import './helpers/vendor.js'; // librarian.js → desk.js → the page's ../../vendor/common/panel.js
+
+const { takeThere } = await import('../public/js/librarian/librarian.js');
 
 const pg = { id: 'pg', kind: 'gutenberg', title: 'Gutenberg' };
 const wp = { id: 'wp', kind: 'wikipedia', title: 'Wikipedia', illustration: 'zim/wp/icon.png' };

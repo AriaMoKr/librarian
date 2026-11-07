@@ -148,19 +148,22 @@ client: api.js ─► rooms.js (what to shelve) ─► World/Bookshelves ─► 
 - **Together** (`together.js`; pure parts in `together-space.js`; SPEC §5.6): the Hallway's shared session (AriaMoKr/layersharedsession v0.3.0, Trystero over public Nostr relays, the Hallway's app id), run by the layer's controller (`../vendor/layersharedsession/together.js`, `createTogether`); vrlbry's `Together` wraps it with what is the library's own. `?room=` joins it as page `DOOR_ID`; its modules load only then. Each visitor shares where in the library they are (`spaceOf`: place and room filters, which decide the layout) as `<DOOR_ID>.space.<memberId>` (written on the controller's `session` event and again on the session's `self`, and by `setSpace`), and the controller's `isHere(peer, avatar)` (the same space, the key kept on the avatar; must not allocate: it runs every frame) decides who is drawn and counted `here`; `nearby` is "elsewhere in the library". The words are `noticeText` / `companyText`. The way out carries `room` on, and none once the visitor has left (common's `leaveUrl`); `leave()` leaves the session first and `cameBack()` rejoins. Its vendor modules are named by relative URL (`../vendor/layersharedsession/…`), not through the import map: `server/vendor.js` rewrites their bare imports (`trystero` → `trystero-nostr/index.mjs`, …) and the build resolves them among the vendor URLs (`vendorResolve`), since a vendor name need not be its package's folder.
 - **`util/books.js`**: holds the sort comparators, `letterOf` and `bookDims`. Both the shelf layout and the A–Z jump / interaction code **must** use these shared helpers so they agree on order and book sizes. Shared constants (dimensions, page size, reading pose, `XR_FRAME_RATE`) are in `config.js`.
   - Sorting is cached, because libraries reach 60,000+ books (the Quest took 2 s per room switch before the caches). Each book's sort keys are computed once, and comparisons use one shared `Intl.Collator`, which gives the same order as `localeCompare`. `sortBooks` caches its result per input array and mode, and `shelfCollections` filters a room out of the library's sorted order. Never mutate a library's book array in place; replace it.
-- **`librarian/`: the Librarian** (docs/LIBRARIAN.md, SPEC §5.10). This is librarian's own code, so keep it here and in `css/librarian.css`, with the wiring in vrlbry's files minimal: one call in `main.js` (`startLibrarian`), the overlay's `onRemoteStart` and `addUiPart`, and help rows. vrlbry's merges then stay clean. Built so far: experiment 1, step 1, the words in the card; there is no model yet.
+- **`librarian/`: the Librarian** (docs/LIBRARIAN.md, SPEC §5.10). This is librarian's own code, so keep it here and in `css/librarian.css`, with the wiring in vrlbry's files minimal: one call in `main.js` (`startLibrarian`), the overlay's `onRemoteStart` and `addUiPart`, interaction's `addPanel`, `addTarget` and `onFrame` (generic: a panel, a thing to point at, a per-frame call), and help rows. vrlbry's merges then stay clean. Built so far: experiment 1, steps 1 and 2, the words in the card and the figure at the stand with his panel in VR; there is no model yet.
   - `ask.js` (pure, English) turns a question into searches over `search.js`'s own (`bookIndex` / `matchBooks`, `findArticles`, `findInText`) and an answer with at most 5 finds.
   - `card.js` (`LibrarianCard`) is its part of the card:
     - a labelled box and Ask;
     - the answer said once in a `role="status"`;
-    - the finds as buttons, whose "Take me there" goes through `takeThere`, as the search's results do (`searchPick(book, { take: true })`, `openArticle`, `openText`).
+    - the finds as buttons, whose "Take me there" goes through `takeThere`, as the search's results do (`searchPick(book, { take: true })`, `openArticle`, `openText`);
+    - `onLooking` / `onAnswer`, which the desk's panel follows.
+  - `figure.js`: his figure, simple shapes merged into one geometry with a colour per vertex and one material (1 draw call); `rayUpright`, the cylinder a pointer finds him by (no allocation).
+  - `desk.js` (`Desk`): the figure beside the stand (placed again on each rebuild, a collider in `world.room.colliders`, turning towards a viewer nearby, standing still with less motion) and, in VR, his panel (common's `Panel` with the stand's keyboard), which asks through the card, so the two always say the same. Nothing it does per frame allocates.
   - `librarian.js` wires it:
-    - L puts the focus in the box;
-    - the help's "Show the librarian" (`vrlbry:librarian` = `{ shown }`) hides it, leaving the card as it was;
+    - L, and on a screen choosing him (a click, a tap, a pad's A, a TV's OK), puts the focus in the box (`intoBox`; after a tap only at its click, which would otherwise land on the card opening under the finger);
+    - the help's "Show the librarian" (`vrlbry:librarian` = `{ shown }`) hides him, leaving the card and the room as they were;
     - a TV's Menu starts on its Ask;
-    - its question goes into scenes.
+    - its question and whether his panel is open go into scenes.
   - It sends nothing that a search typed in the overlay would not.
-  - Tests: `test/client-librarian.test.js`.
+  - Tests: `test/client-librarian.test.js`, `test/client-librarian-desk.test.js` (the desk in Node with a stub canvas and a fake interaction).
 
 ## Testing notes
 

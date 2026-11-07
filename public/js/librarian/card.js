@@ -124,6 +124,14 @@ export class LibrarianCard {
     this._sayTimer = undefined;
     /** @type {import('./ask.js').Answer | null} the answer shown */
     this.answer = null;
+    /**
+     * Told as a question goes off, and as its answer is shown (or taken away: null): the
+     * librarian's panel in VR (desk.js), which says the same.
+     * @type {(() => void) | null}
+     */
+    this.onLooking = null;
+    /** @type {((answer: import('./ask.js').Answer | null) => void) | null} */
+    this.onAnswer = null;
     const el = document.createElement('div');
     el.className = 'lb-ask';
     el.innerHTML = `
@@ -161,6 +169,7 @@ export class LibrarianCard {
     const token = ++this._token;
     clearTimeout(this._lookingTimer);
     this._list.setAttribute('aria-busy', 'true');
+    this.onLooking?.();
     this._lookingTimer = setTimeout(() => {
       if (token === this._token) this._say('Looking…');
     }, LOOKING_AFTER);
@@ -194,6 +203,7 @@ export class LibrarianCard {
     this._list.replaceWith(list);
     fillImages(list);
     this._say(answer.text);
+    this.onAnswer?.(answer);
     if (!had) return;
     if (this.tv && answer.finds.length) /** @type {HTMLElement} */ (list.querySelector('button')).focus();
     else if (coarse() && document.activeElement === this.input) this.input.blur(); // the keyboard down, the answer seen
@@ -221,6 +231,7 @@ export class LibrarianCard {
     list.replaceChildren();
     list.hidden = true;
     list.removeAttribute('aria-busy');
+    this.onAnswer?.(null);
   }
 
   /** Shown or not (the help dialog's "Show the librarian"). @param {boolean} on */

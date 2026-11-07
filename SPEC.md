@@ -1167,7 +1167,9 @@ public/
     perf-scenarios.js    built-in performance scenarios, loaded only by perf.run().
     librarian/ask.js     the librarian (§5.10): a question → searches → an answer and its finds (pure).
     librarian/card.js    its part of the library card: the question box, the answer, the finds.
-    librarian/librarian.js  startLibrarian: that part put in the card, L, its help choice, Take me there.
+    librarian/figure.js  his figure: simple shapes in one mesh with one material; rayUpright (pointing at him).
+    librarian/desk.js    Desk: the figure beside the stand (place, collider, turning) and, in VR, his panel.
+    librarian/librarian.js  startLibrarian: the card's part and the desk, L, the help's choice, Take me there.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
 ```
 
@@ -1497,7 +1499,11 @@ class Label { constructor({ width, height }); setText(title, sub); visible; pane
 ### 5.6 Interaction (`interaction.js`) — the state machine
 
 States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` during animations.
-- **browse:** pointers raycast shelves + panels. Hover a book → `shelves.setHighlight`, tooltip
+- **browse:** pointers raycast shelves + panels, with the panels and things others add (the
+  librarian's, §5.10): `addPanel(panel)` joins the kiosk's and the others (hit, hovered, updated);
+  `addTarget(t)` is a thing to point at, `t.hit(ray, far)` its distance or Infinity (making no
+  objects), `t.select(pointer)` on a select while browsing (solid in other states), `t.hover(on)`
+  every frame; `onFrame(fn)` runs `fn(dt)` at the end of each update. Hover a book → `shelves.setHighlight`, tooltip
   panel near the book with title / author. Select → book leaves its slot (`hideBook`, a `Book3D`
   at its slot transform) and flies (~0.5 s ease) to ~0.45 m in front of the viewer at chest height,
   turning to show the cover → **inspect**. **Room first** (`world/room-ahead.js` `makeRoom`): the
@@ -1740,7 +1746,7 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   block anchor `{ c, b }`, the side of the spread it is on, and `pages`: 1 or 2 at a time as shown),
   `settings` (fontScale, theme, readScale, readDistance, pageView) and `ui`: `page` (the overlay's `reportUi()`: library card, search box
   and whether its results are open, update banner, loading/error screen, toasts, the parts others
-  add (`addUiPart(name, { state, restore })`: the librarian's question, §5.10); as they were
+  add (`addUiPart(name, { state, restore })`: the librarian's question and panel, §5.10); as they were
   when the help was opened, since opening it closes the search results) and the 3D panels
   (`interaction.uiState()`: the kiosk's tab, search and list scrolling; inspect panel, toolbar,
   contents and its scrolling; the book under the pointer). `restoreScene` puts the book back,
@@ -2265,14 +2271,16 @@ ui/text-view.js, ui/remote.js); main.js only wires them.
 
 The Librarian's experiments (docs/LIBRARIAN.md) are librarian's own; the rest of the client is
 vrlbry's. So their code stays in `librarian/` and `css/librarian.css`, main.js wires them with one
-call (`startLibrarian({ overlay, interaction, tv })`), and the overlay gives them two hooks
-(`onRemoteStart`, `addUiPart`). Built so far: experiment 1, step 1 (2026-11-07), the words in the
-card, with no model. Still to come in experiment 1: the figure and its panel beside the stand
-(VR), the walk to the book, its voice.
+call (`startLibrarian({ overlay, interaction, tv })`), the overlay gives them two hooks
+(`onRemoteStart`, `addUiPart`) and interaction three (`addPanel`, `addTarget`, `onFrame`: §5.6).
+Built so far, with no model: experiment 1, steps 1 and 2 (2026-11-07), the words in the card and
+the figure beside the stand, with his panel in VR. Still to come in experiment 1: the walk to the
+book, his voice.
 
-- **Optional.** The help has the choice "Show the librarian (ask it for a book in the card, or
-  press L)", stored as `vrlbry:librarian` = `{ shown }` and on until unticked. Unticked, the card is
-  as it was without it, and L does nothing.
+- **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
+  the stand, or press L)", stored as `vrlbry:librarian` = `{ shown }` and on until unticked.
+  Unticked, the card is as it was without him, L does nothing, and he is not in the room: not
+  drawn, not pointed at, his collider gone and his panel closed.
   - A question is answered by the library's own searches (`search.js`, §5.6), through the
     server's API or the local worker, as a search typed in the overlay is. Nothing else is sent
     anywhere.
@@ -2355,7 +2363,48 @@ card, with no model. Still to come in experiment 1: the figure and its panel bes
   in browse or inspect, when nobody is typing and no dialog is open, and not in the text view,
   VR or the kiosk's search. It is a `document` listener, so it runs before controls.js's on
   `window`, which then sees the key as taken.
+- **The figure** (`figure.js`, `Figure`): the Librarian as docs/LIBRARIAN.md has him, stylized:
+  silver hair and beard, blue eyes, a navy V-neck sweater over a pale blue shirt, a rust-brown
+  wool tie, a book in his left hand. Some forty simple shapes (boxes, cylinders, capsules,
+  spheres) merged into one geometry (`figureGeometry`) with a colour per vertex and one Lambert
+  material, lit as the room's furniture: 1 draw call. He is 1.8 m tall and faces +Z at his origin.
+  - **Where** (`desk.js`, `Desk._place`): 0.95 m to the stand's left as seen from in front of it
+    (its local −X), facing the spawn point. He is placed again whenever the room is rebuilt (a new
+    `world.room`), which closes his panel.
+  - **Solid:** a collider `{ type: 'circle', r: 0.25, h: 1.8 }` in `world.room.colliders` while
+    he is shown, so walking and teleporting go round him and the laser stops at him.
+  - **Pointed at:** an upright cylinder of 0.33 m round him, 1.86 m high (`rayUpright`: through
+    its side or onto its top, making no objects), met before the collider. While a pointer is on
+    him he glows faintly (emissive) and the cursor is a hand.
+  - **Turning:** towards a viewer within 6 m, up to 1.3 rad either way from where he faces at
+    rest (not round to someone behind him), at most 1.6 rad/s. With less motion he stands still.
+    Nothing done each frame makes an object.
+- **Choosing him** (`interaction.addTarget`, while browsing):
+  - On a screen he is a way into the card's box (`intoBox`: the card opened if collapsed, the
+    focus in the box): a click, a tap, a gamepad's A at the crosshair, a TV's OK with the dot on
+    him. After a tap the box opens at the tap's click: its mouse events come after the pointerup
+    that chose him and would land on the card opening under the finger, the mousedown taking the
+    focus off the box and the click pressing what is there.
+  - In VR his panel opens; choosing him again closes it.
+- **His panel** (VR; `Desk`, one of common's `Panel`s, 0.9 × 1.0 m at 1000 px/m):
+  - Placed as it opens: 0.95 m from the eyes and 0.45 rad off the line to him, on the side away
+    from the stand (so he stands beside it), its centre at 1.47 m, facing the eyes and leaning
+    back as the stand's does.
+  - "Ask the librarian" and ✕; the question with a caret, or "A title, an author or a subject";
+    the stand's keyboard (the Search tab's four rows, then Space, ⌫, Clear and Ask), one space at
+    a time, at most 80 characters, Ask lit once there is a question.
+  - Ask goes through the card: the question is put in the card's box and asked there
+    (`card.askNow`), and the panel follows the card (`onLooking`: "Looking…"; `onAnswer`: the
+    answer), so the two always say the same. Opening the panel takes the card's question and
+    answer.
+  - The answer (up to 3 lines), then the finds as a list: title, line, "Take me there", which
+    closes the panel and goes there (`takeThere`).
+  - It closes with ✕, choosing him again, on leaving VR, on a rebuild and when he is hidden. It
+    is drawn again only when its words change (the panel's `dirty`): 1 draw call while open, per
+    eye.
 - **TV** (§5.9). The help has a row for the librarian on each kind of screen.
+  - OK with the dot on him (`useMiddle`) puts the focus in the card's box, held
+    (`inputmode="none"`) until OK.
   - Menu's first stop is Ask while the card is open (`overlay.onRemoteStart` → `startStop`); with
     the card collapsed, Menu lands where it did without the librarian.
   - ↑ from Ask goes to the box, which is held (`inputmode="none"`) until OK.
@@ -2366,14 +2415,25 @@ card, with no model. Still to come in experiment 1: the figure and its panel bes
   one scroll: the library list's own scroll goes (`:has`). A short screen and a TV keep their own
   rules.
 - **Scenes** (`overlay.addUiPart('librarian', …)`): the question and the answer shown are kept
-  as `ui.page.librarian = { q, answer }`. When a scene is restored, a question that had an answer
-  is asked again.
+  as `ui.page.librarian = { q, answer }`, with `panel: true` while his panel is open. When a scene
+  is restored, a question that had an answer is asked again, and in a headset the panel opens
+  again.
 - **Tests.** `test/client-librarian.test.js` covers:
   - the questions read and the searches tried;
   - the answers;
   - the finds' order: articles by name, books kept for a title, stalled or failing searches;
   - the list's markup (fake DOM);
   - Take me there.
+
+  `test/client-librarian-desk.test.js` covers:
+  - the figure: one geometry with colours, his height, facing +Z, inside the cylinder that finds
+    him, one material, the glow;
+  - `rayUpright`;
+  - where he stands and faces, and his collider (in, out, moved to a new room);
+  - choosing him on a screen and in a headset;
+  - where the panel opens, its keys, Ask through the card, "Looking…", the answer and the finds,
+    Take me there;
+  - his turning: eased, limited, not to someone behind him or far off, not with less motion.
 
   Checked in headless Chrome with real keys and taps against the demo set (2026-11-07):
   - On a desktop, L put the focus in the box. "What is insulin?" found 5 articles, Insulin first,
@@ -2385,3 +2445,16 @@ card, with no model. Still to come in experiment 1: the figure and its panel bes
     Menu then went to the book's buttons.
   - axe with the answer shown: on a desktop only the library list's scrolling
     (`scrollable-region-focusable`, vrlbry's own); nothing on a phone or a TV.
+
+  Step 2, the same way (2026-11-07):
+  - On a desktop he glowed under the mouse, with a hand cursor. A click on him opened the card
+    with the focus in the box. 27 draw calls with him, 26 without. A sampled heap profile while
+    he turned towards a viewer walking round him found nothing allocated in `librarian/`.
+  - On a phone a tap on him opened the card with the focus in the box, once its click had come.
+  - On a TV, OK with the dot on him put the focus in the held box, and OK again let it be typed
+    in.
+  - In VR (`?xr=emulate`), the right controller's trigger on him opened his panel. "insulin"
+    typed on its keys and Ask found 5 articles, and Take me there opened the volume and closed
+    the panel. Leaving VR closed it too. Draw calls at one pose, both eyes: 56 with the panel
+    closed, 58 open, 54 with him hidden.
+  - axe: as for step 1.

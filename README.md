@@ -23,9 +23,11 @@ The experiments, cheapest first, each one something to try on its own
 5. **A model on the device.** Whether a small language model runs in the browser at all, on a
    desktop and on a Quest.
 
-The first is under way, a step at a time. Its words are in: ask the librarian in the library
-card (or press L) for a title, an author or a subject, and *Take me there* goes to what it found.
-The figure at the stand, the walk to the book and its voice come next. The librarian will always
+The first is under way, a step at a time. Its words and its figure are in: the librarian stands
+beside the catalogue stand, and you ask him for a title, an author or a subject in the library
+card (click or tap him, or press L), or in VR on his own panel (point at him and pull the
+trigger); *Take me there* goes to what he found. The walk to the book and his voice come next.
+The librarian will always
 be optional (the help's *Show the librarian* turns it off): the library works as it does without
 it, the page reports nothing about its visitors, and a question goes to a hosted model only when
 you ask one, having chosen to.
@@ -180,7 +182,7 @@ Then press **Enter VR**.
 | Look | drag the mouse | drag one finger | right stick | turn your head |
 | Move | W A S D / arrows, Q E to turn, Shift to hurry | drag two fingers | left stick (click it to hurry) | right stick forward: teleport arc · flick right stick: snap turn · left stick: walk (or teleport, and turning smoothly: the kiosk, or your choice in the Hallway) |
 | Take a book | click it | tap it | aim the crosshair, **A** | point and pull the trigger (or pinch) |
-| Ask the librarian | **L**, or the box in the card | the box in the card | | |
+| Ask the librarian | **L**, click him (beside the catalogue stand), or the box in the card | tap him, or the box in the card | aim the crosshair at him, **A**: the box in the card | point at him and pull the trigger: his panel |
 | Read | click the book or **Read** | tap **Read** | **A** | trigger on the book, or **A** |
 | Turn pages | ← → Space, or click a page | swipe, or tap a page | bumpers, or D-pad ← → | flick the right stick, or trigger on a page |
 | Text size, theme, contents | + / − · **N** · **C**, or the toolbar | toolbar | D-pad ↑ ↓ · **Y** · **X** | toolbar |

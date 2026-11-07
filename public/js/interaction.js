@@ -178,6 +178,10 @@ export class Interaction {
     // arrays, so the per-frame hit test and update make none.
     this._panels = [this.kiosk, this.inspectPanel, this.toolbar, this.tocPanel];
     this._openingPanels = [this.inspectPanel];
+    // Other parts of the room (the librarian's: librarian/): things to point at and what they do
+    // each frame (addTarget, onFrame); their panels join _panels (addPanel).
+    this._targets = [];
+    this._frameFns = [];
     this._buildExitRing();
     this._buildFade();
     // Compile the shaders of overlays that appear later (fade, exit ring) now, behind the loading
@@ -218,6 +222,27 @@ export class Interaction {
     this.kiosk.mesh.position.copy(k.position).setY(1.47);
     this.kiosk.mesh.rotation.set(0, k.yaw, 0, 'YXZ');
     this.kiosk.mesh.rotateX(-0.12);
+  }
+
+  /** Another panel in the room (the librarian's): pointed at, hovered, clicked and repainted as the kiosk is. */
+  addPanel(panel) {
+    this._panels.push(panel);
+  }
+
+  /**
+   * Another thing in the room to point at (the librarian's figure): `hit(ray, far)` is its
+   * distance along a world-space ray (Infinity for none) and must not allocate (it runs every
+   * frame); `select(pointer)` while browsing; `hover(on)` every frame, true while a pointer is on
+   * it. When a book is out it stops the laser, as furniture does.
+   * @param {{ hit: (ray: THREE.Ray, far: number) => number, select: (pointer: object) => void, hover?: (on: boolean) => void }} target
+   */
+  addTarget(target) {
+    this._targets.push(target);
+  }
+
+  /** fn(dt) every frame, after the panels' own update (the librarian's figure). */
+  onFrame(fn) {
+    this._frameFns.push(fn);
   }
 
   /** The library currently shown in the hall. */
@@ -1126,6 +1151,11 @@ export class Interaction {
     if (door && door.distance < rc.far && (!best || door.distance < best.distance)) {
       best = { kind: door.opening ? 'door' : 'solid', distance: door.distance };
     }
+    // Others' things (addTarget): pointed at while browsing, else solid.
+    for (const t of this._targets) {
+      const d = t.hit(rc.ray, rc.far);
+      if (d < rc.far && (!best || d < best.distance)) best = this.state === 'browse' ? { kind: 'target', target: t, distance: d } : { kind: 'solid', distance: d };
+    }
     if (this.book3d && (this.state === 'read' || this.state === 'inspect')) {
       if (this.state === 'read') {
         const pg = this.book3d.hitTestPages(rc);
@@ -1187,6 +1217,8 @@ export class Interaction {
       this.pick(hit.book);
     } else if (hit.kind === 'door' && this.state === 'browse') {
       this.leave();
+    } else if (hit.kind === 'target' && this.state === 'browse') {
+      hit.target.select(pointer);
     } else if (hit.kind === 'held' && this.state === 'inspect') {
       if (this.book.readable) this.read();
     } else if (hit.kind === 'page' && this.state === 'read') {
@@ -2939,6 +2971,7 @@ export class Interaction {
     let hoverBook = null;
     let hoverLink = null;
     let hoverDoor = false;
+    let hoverTarget = null;
     let dotPanel = null;
     let dotList = null;
     for (const pointer of this.controls.pointers) {
@@ -2961,6 +2994,9 @@ export class Interaction {
       } else if (hit?.kind === 'door') {
         hoverDoor = true;
         interactive = true;
+      } else if (hit?.kind === 'target') {
+        hoverTarget = hit.target;
+        interactive = true;
       } else if (hit?.kind === 'page' || hit?.kind === 'held') {
         interactive = true;
         if (hit.kind === 'page' && !hoverLink) hoverLink = this._linkUnder(hit);
@@ -2969,6 +3005,7 @@ export class Interaction {
       this._hover.set(pointer.id, hit?.kind === 'panel' ? hit.panel : null);
     }
     this._markLink(hoverLink);
+    for (const t of this._targets) t.hover?.(t === hoverTarget);
     if (dotList !== this._dotList) {
       this._dotPanel = dotPanel;
       this._dotList = dotList;
@@ -3005,6 +3042,7 @@ export class Interaction {
     for (const p of this._panels) if (p.visible) p.update();
     if (this.tooltip.visible) this.tooltip.panel.update();
     if (this._notice?.visible && this._time >= this._noticeUntil) this._notice.visible = false;
+    for (const fn of this._frameFns) fn(dt);
   }
 }
 
