@@ -5,7 +5,7 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 (CLAUDE.md, "Branches and sites"). These are the proposals, cheapest first, each one something to
 try on its own.
 
-**Built so far** (SPEC §5.10): experiment 1, steps 1 to 3 of 4.
+**Built so far** (SPEC §5.10): experiment 1, all four steps.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -20,8 +20,13 @@ try on its own.
   the comfort vignette closes with the speed, a long way's middle is skipped in a blink, and the
   turn to the shelf is a blink. A click, a tap, Enter, Esc or the trigger is there at once; with
   less motion it is the cut it was. Later he walks back to the desk.
+- **His voice:** once chosen (the help's "The librarian speaks his answers", or *Voice* on his
+  panel; off at first), he says each answer aloud with the browser's speech synthesis, in an
+  English voice of the device's own (never a network voice, which would send the words to its
+  service), a man's where one is known by name. A new question stops the last answer. Where the
+  device has no such voice, the choice says so.
 
-Step 4 is still to come: his voice.
+Next: experiment 2, once a model is chosen (a hosted one, or a local one such as Ollama).
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,

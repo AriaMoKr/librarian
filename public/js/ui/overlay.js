@@ -108,7 +108,7 @@ const HELP = {
     ['Close / put back', 'B or Y button'],
     ['Book out of sight', 'Press a thumbstick: it comes in front of you'],
     ['Leave VR', 'Hold B or Y for a second while browsing, or “Exit VR” on the catalogue stand'],
-    ['Ask the librarian', 'Point at him beside the catalogue stand, pull the trigger: type on his panel, Ask · “Take me there”: he leads you to what he found (the trigger: there at once)'],
+    ['Ask the librarian', 'Point at him beside the catalogue stand, pull the trigger: type on his panel, Ask · “Take me there”: he leads you to what he found (the trigger: there at once) · “Voice” on his panel: he says his answers'],
   ],
 };
 

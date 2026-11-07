@@ -30,7 +30,7 @@ const spotBefore = (b) => ({ position: new THREE.Vector3(b.position.x + 1.5 * Ma
  * R 3.8) with eight bookcases round its far wall; `hall`: a long hall (_layoutHall) with a row of
  * them at its far end. Its controls are an EventTarget (select) with a rig holding the camera.
  */
-function room({ presenting = false, hall = false, furniture = [] } = {}) {
+function room({ presenting = false, hall = false, furniture = [], speech = undefined } = {}) {
   const spawn = hall ? new THREE.Vector3(0, 0, 3.1) : new THREE.Vector3(0, 0, 1.33);
   const kp = hall ? new THREE.Vector3(1.3, 0, 1.9) : new THREE.Vector3(1.368, 0, -0.07);
   const R = 3.8;
@@ -96,6 +96,7 @@ function room({ presenting = false, hall = false, furniture = [] } = {}) {
       log.push(['take', find.book.title]);
     },
     onWalk: (on) => log.push(['walk', on]),
+    speech,
   });
   const frame = (dt = 1 / 72, n = 1) => {
     for (let i = 0; i < n; i++) for (const fn of frames) fn(dt);
@@ -272,6 +273,62 @@ describe('the librarian: at the desk', () => {
     p.click(...[(p.get('close').x + 30) / p.w, 1 - (p.get('close').y + 28) / p.h]);
     assert.equal(p.visible, false);
     assert.deepEqual(desk.uiState(), {});
+  });
+
+  it('says his answers once chosen, stops at a new question or hidden, and his panel\'s Voice button chooses it', () => {
+    const said = [];
+    let on = false;
+    let available = true;
+    const speech = {
+      available: () => available,
+      on: () => on && available,
+      set: (v) => {
+        on = v;
+        said.push(['set', v]);
+        r.desk.refresh(); // as librarian.js does
+      },
+      say: (text) => said.push(['say', text]),
+      stop: () => said.push(['stop']),
+    };
+    const r = room({ presenting: true, speech });
+    const { desk, card } = r;
+    const answer = { text: 'I have Emma, by Jane Austen.', finds: [], search: null };
+    card.onLooking();
+    card.onAnswer(answer);
+    assert.deepEqual(said, [['stop']], 'not chosen: not said');
+    on = true;
+    said.length = 0;
+    card.onLooking();
+    card.onAnswer(answer);
+    assert.deepEqual(said, [['stop'], ['say', 'I have Emma, by Jane Austen.']], 'a new question stops the last answer');
+    said.length = 0;
+    card.onAnswer(null);
+    assert.deepEqual(said, [['stop']], 'the answer taken away');
+    said.length = 0;
+    desk.setShown(false);
+    card.onAnswer(answer);
+    assert.deepEqual(said, [['stop']], 'hidden: stopped, and nothing said');
+    desk.setShown(true);
+    // His panel's Voice button, beside ✕.
+    desk.open();
+    const p = desk.panel;
+    const button = () => p.get('voice');
+    const press = (el) => p.click((el.x + el.w / 2) / p.w, 1 - (el.y + el.h / 2) / p.h);
+    const state = () => ({ label: button().label, active: !!button().active, disabled: !!button().disabled });
+    assert.deepEqual(state(), { label: 'Voice: on', active: true, disabled: false });
+    assert.ok(button().x > p.get('q').x + 300 && button().x + button().w < p.get('close').x, 'between the title and ✕');
+    said.length = 0;
+    press(button());
+    assert.deepEqual(said, [['set', false]]);
+    assert.deepEqual(state(), { label: 'Voice: off', active: false, disabled: false });
+    press(button());
+    assert.deepEqual(state(), { label: 'Voice: on', active: true, disabled: false });
+    available = false;
+    desk.refresh();
+    assert.deepEqual(state(), { label: 'No voice', active: false, disabled: true });
+    said.length = 0;
+    press(button());
+    assert.deepEqual(said, [], 'no voice: nothing to choose');
   });
 
   it('turns towards a viewer nearby, eased and at most so far round, and stands still with less motion', () => {

@@ -1,7 +1,7 @@
 // @ts-check
-// The librarian at the desk (docs/LIBRARIAN.md; SPEC §5.10), experiment 1 steps 2 and 3: his
+// The librarian at the desk (docs/LIBRARIAN.md; SPEC §5.10), experiment 1 steps 2 to 4: his
 // figure beside the catalogue stand, facing where you arrive and turning towards you as you come
-// near; his panel in VR; and his walk to what he found.
+// near; his panel in VR; his walk to what he found; and his voice.
 // - In a headset you point at him and pull the trigger: the panel has the stand's on-screen
 //   keyboard, then his answer and what he found, each a way there. On a screen he is a way into
 //   the card's question box (a click, a tap, a TV's OK with the dot on him). The question is asked
@@ -13,6 +13,8 @@
 //   Enter, Esc or a TV's OK (librarian.js) is there at once. With less motion, or with him hidden,
 //   it is the cut to the shelf it was. Once the book is back and you have gone on (or after a
 //   while) he walks back to the desk.
+// - When the visitor has chosen it (the help dialog, or his panel's Voice button), he says each
+//   answer aloud (voice.js, through librarian.js); a new question, or hiding him, stops it.
 //
 // The figure is one draw call, the panel one more while it is open, the way on the floor one more
 // while walking; nothing done every frame makes an object. A walk's planning is a grid over the
@@ -30,6 +32,16 @@ import { aheadWay, besideEnd, Walk, WALK, WayLine } from './walk.js';
 /** @typedef {import('./path.js').Spot} Spot */
 /** @typedef {import('./path.js').Along} Along */
 
+/**
+ * His voice, as the visitor chose it (librarian.js, over voice.js).
+ * @typedef {object} Speech
+ * @property {() => boolean} available whether the device has a voice for him
+ * @property {() => boolean} on whether he speaks his answers: chosen, and a voice here
+ * @property {(on: boolean) => void} set chooses it (his panel's Voice button)
+ * @property {(text: string) => void} say says it, stopping what he was saying
+ * @property {() => void} stop
+ */
+
 /** The on-screen keyboard's rows: the catalogue stand's (interaction.js SEARCH_KEYS). */
 const KEYS = ['1234567890', 'qwertyuiop', "asdfghjkl'", 'zxcvbnm-.,'];
 const MAX_QUESTION = 80;
@@ -39,6 +51,8 @@ const BESIDE = 0.95;
 const PANEL_AT = 0.95;
 const PANEL_OFF = 0.45;
 const PANEL_Y = 1.47; // its centre's height (m), as the stand's
+/** The panel's Voice button's width (px), beside its ✕. */
+const VOICE_W = 180;
 /** Turning towards the viewer: at most this fast (rad/s), this far (rad) either way from rest, from this near (m). */
 const TURN_RATE = 1.6;
 const TURN_MAX = 1.3;
@@ -107,14 +121,16 @@ export class Desk {
    * @param {() => void} o.intoBox on a screen: into the card's question box
    * @param {(on: boolean) => void} [o.onWalk] true as he starts to lead the way, false once the
    *   book is out (or the walk ended without it): the page's card fades meanwhile (librarian.js)
+   * @param {Speech} [o.speech] his voice, as the visitor chose it
    */
-  constructor({ interaction, card, take, multi, intoBox, onWalk }) {
+  constructor({ interaction, card, take, multi, intoBox, onWalk, speech }) {
     this.interaction = interaction;
     this.card = card;
     this.take = take;
     this.multi = multi;
     this.intoBox = intoBox;
     this.onWalk = onWalk;
+    this.speech = speech;
     this.shown = true;
     this.figure = new Figure();
     interaction.scene.add(this.figure.mesh);
@@ -175,13 +191,21 @@ export class Desk {
     interaction.controls?.addEventListener?.('select', () => this.skipWalk());
     card.onLooking = () => {
       this._looking = true;
+      this.speech?.stop(); // a new question stops the last answer
       this._refill();
     };
-    card.onAnswer = () => {
+    card.onAnswer = (answer) => {
       this._looking = false;
+      if (answer && this.shown && this.speech?.on()) this.speech.say(answer.text);
+      else if (!answer) this.speech?.stop();
       this._refill();
     };
     this._place();
+  }
+
+  /** His panel again, while it is open: his voice chosen or not elsewhere (the help dialog), or the voices come. */
+  refresh() {
+    this._refill();
   }
 
   /** Shown or not (the help's "Show the librarian"): hidden, he is not in the room at all. @param {boolean} on */
@@ -191,6 +215,7 @@ export class Desk {
     if (!on) {
       this.close();
       this.skipWalk(); // it ends at once; shown again, he is at the desk
+      this.speech?.stop();
     }
     if (!this._plan) this._toDesk();
     else this._fence();
@@ -616,8 +641,19 @@ export class Desk {
     const W = p.w;
     const pad = 36;
     p.clear();
-    p.add({ type: 'text', x: pad, y: 26, w: W - 2 * pad - 80, h: 54, text: 'Ask the librarian', size: 44, weight: '600', serif: true, color: UI.accent });
+    p.add({ type: 'text', x: pad, y: 26, w: W - 2 * pad - 80 - VOICE_W, h: 54, text: 'Ask the librarian', size: 44, weight: '600', serif: true, color: UI.accent });
     p.add({ id: 'close', type: 'button', x: W - pad - 64, y: 22, w: 64, h: 56, label: '✕', size: 30, onClick: () => this.close() });
+    // Whether he speaks his answers (the help dialog's choice too); "No voice" where the device has none.
+    const speech = this.speech;
+    if (speech) {
+      const ok = speech.available();
+      const on = ok && speech.on();
+      p.add({
+        id: 'voice', type: 'button', x: W - pad - 64 - 12 - VOICE_W, y: 22, w: VOICE_W, h: 56, size: 26,
+        label: !ok ? 'No voice' : on ? 'Voice: on' : 'Voice: off', active: on, disabled: !ok,
+        onClick: () => speech.set(!speech.on()),
+      });
+    }
     p.add({ type: 'rect', x: pad, y: 96, w: W - 2 * pad, h: 60, radius: 14, color: 'rgba(255,255,255,0.08)' });
     p.add({ id: 'q', type: 'text', x: pad + 18, y: 109, w: W - 2 * pad - 36, h: 40, size: 30, maxLines: 1, ...this._questionLine() });
     const gap = 8;

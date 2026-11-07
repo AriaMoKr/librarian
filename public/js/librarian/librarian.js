@@ -4,22 +4,27 @@
 //   searches (search.js);
 // - his figure beside the catalogue stand, in VR his panel, and his walk to what he found, which
 //   the card's "Take me there" goes through too (desk.js);
-// - his choice in the help dialog, "Show the librarian", kept under `librarian` in this site's
-//   storage (without him the library is as it was);
+// - his choices in the help dialog, "Show the librarian" and "The librarian speaks his answers"
+//   (off at first; his panel's Voice button too), kept under `librarian` in this site's storage
+//   (without him the library is as it was); his voice (voice.js);
 // - the L key, and on a screen the figure, which put you in his question box; Enter or Esc while
 //   he leads the way, which is there at once;
 // - on a TV, Menu landing on his Ask;
 // - his question in the page's state (debug reports, scenes).
-// Experiment 1: step 1, the words in the card; step 2, the figure and his panel; step 3, the walk.
+// Experiment 1: step 1, the words in the card; step 2, the figure and his panel; step 3, the walk;
+// step 4, his voice.
 
 import { bookIndex, findArticles, findInText } from '../search.js';
 import { load, save } from '../util/storage.js';
 import { ask, MAX_FINDS } from './ask.js';
 import { LibrarianCard } from './card.js';
 import { Desk } from './desk.js';
+import { Voice } from './voice.js';
 
-/** Its storage key (util/storage.js): { shown }. */
+/** Its storage key (util/storage.js): { shown, speaks }. */
 const KEY = 'librarian';
+/** What he says as his voice is chosen, so it is heard at once. */
+const VOICE_ON = 'I will say my answers aloud.';
 
 /**
  * Takes the visitor to a find, as the search's results do: a book to its shelf and into their
@@ -105,9 +110,19 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   // While he leads the way the card, the search and the hint fade, as while reading (librarian.css):
   // on a phone the card would hide the walk, and a click or tap anywhere is there at once.
   const onWalk = (/** @type {boolean} */ on) => overlay.root.classList.toggle('lb-walking', on);
-  const desk = new Desk({ interaction, card, take, multi, intoBox, onWalk });
+  // His voice: the device's own, said only once chosen (prefs.speaks).
+  const voice = new Voice();
+  /** @type {import('./desk.js').Speech} */
+  const speech = {
+    available: () => voice.available,
+    on: () => !!prefs.speaks && voice.available,
+    set: (on) => setSpeaks(on),
+    say: (text) => voice.say(text),
+    stop: () => voice.stop(),
+  };
+  const desk = new Desk({ interaction, card, take, multi, intoBox, onWalk, speech });
   // For the console and scripted checks: __vrlbry.interaction.librarian.
-  interaction.librarian = { card, desk };
+  interaction.librarian = { card, desk, voice };
   // Out of VR his panel goes: on a screen the card is his.
   interaction.renderer?.xr?.addEventListener?.('sessionend', () => desk.close());
 
@@ -128,6 +143,35 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     show(box.checked);
   };
   show(box.checked);
+
+  // "The librarian speaks his answers", after it: off at first, and only with a voice of the
+  // device's own (voice.js), which may come after the page (the box then follows).
+  const voicePref = document.createElement('label');
+  voicePref.className = 'ov-update-pref lb-pref';
+  voicePref.innerHTML = '<input type="checkbox"> <span></span>';
+  pref.after(voicePref);
+  const voiceBox = /** @type {HTMLInputElement} */ (voicePref.querySelector('input'));
+  const voiceText = /** @type {HTMLElement} */ (voicePref.querySelector('span'));
+  const showVoice = () => {
+    voiceBox.disabled = !voice.available;
+    voiceBox.checked = speech.on();
+    voiceText.textContent = voice.available
+      ? 'The librarian speaks his answers (in this device’s own voice)'
+      : 'The librarian speaks his answers (this device has no English voice of its own)';
+    desk.refresh();
+  };
+  /** Chosen in the help dialog or on his panel: kept, and heard at once. @param {boolean} on */
+  function setSpeaks(on) {
+    prefs.speaks = on;
+    save(KEY, prefs);
+    if (on) voice.say(VOICE_ON);
+    else voice.stop();
+    showVoice();
+  }
+  voiceBox.onchange = () => setSpeaks(voiceBox.checked);
+  voice.onChange = showVoice;
+  showVoice();
+  window.addEventListener('pagehide', () => voice.stop());
 
   // L: into the question box, from the view (not from a field, a dialog or the text view, nor in
   // VR). Before the view's own keys (controls.js, on window), which leave a key alone once it is

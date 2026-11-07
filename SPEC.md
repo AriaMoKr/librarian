@@ -1171,6 +1171,7 @@ public/
     librarian/desk.js    Desk: the figure beside the stand (place, collider, turning), in VR his panel, and his walk (takeThere).
     librarian/path.js    Floor: a room's floor as a grid, ways across it round what stands there (A*); along a way.
     librarian/walk.js    Walk: where he and the viewer are along a walk (eased, a blink in VR); WayLine, the way on the floor.
+    librarian/voice.js   Voice: his answers said aloud with the device's own English voice (speechSynthesis); chooseVoice.
     librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choice.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
 ```
@@ -2275,14 +2276,13 @@ The Librarian's experiments (docs/LIBRARIAN.md) are librarian's own; the rest of
 vrlbry's. So their code stays in `librarian/` and `css/librarian.css`, main.js wires them with one
 call (`startLibrarian({ overlay, interaction, tv })`), the overlay gives them two hooks
 (`onRemoteStart`, `addUiPart`) and interaction three (`addPanel`, `addTarget`, `onFrame`: §5.6).
-Built so far, with no model: experiment 1, steps 1 to 3 (2026-11-07): the words in the card, the
-figure beside the stand with his panel in VR, and his walk to the book. Still to come in
-experiment 1: his voice.
+Built so far, with no model: experiment 1, all four steps (2026-11-07): the words in the card, the
+figure beside the stand with his panel in VR, his walk to the book, and his voice.
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
-  the stand, or press L)", stored as `vrlbry:librarian` = `{ shown }` and on until unticked.
-  Unticked, the card is as it was without him, L does nothing, and he is not in the room: not
-  drawn, not pointed at, his collider gone and his panel closed.
+  the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks }` (kept whole) and on
+  until unticked. Unticked, the card is as it was without him, L does nothing, and he is not in
+  the room: not drawn, not pointed at, his collider gone, his panel closed and his voice stopped.
   - A question is answered by the library's own searches (`search.js`, §5.6), through the
     server's API or the local worker, as a search typed in the overlay is. Nothing else is sent
     anywhere.
@@ -2395,7 +2395,8 @@ experiment 1: his voice.
   - Placed as it opens: 0.95 m from the eyes and 0.45 rad off the line to him, on the side away
     from the stand (so he stands beside it), its centre at 1.47 m, facing the eyes and leaning
     back as the stand's does.
-  - "Ask the librarian" and ✕; the question with a caret, or "A title, an author or a subject";
+  - "Ask the librarian", Voice (His voice, below) and ✕; the question with a caret, or "A title,
+    an author or a subject";
     the stand's keyboard (the Search tab's four rows, then Space, ⌫, Clear and Ask), one space at
     a time, at most 80 characters, Ask lit once there is a question.
   - Ask goes through the card: the question is put in the card's box and asked there
@@ -2452,7 +2453,28 @@ experiment 1: his voice.
     back at once.
   - **Costs.** The line is 1 draw call while walking. The floor and a way are made only for a walk
     (or a walk back), and nothing done each frame makes an object.
-  - `interaction.librarian` is `{ card, desk }`, for the console and scripted checks.
+  - `interaction.librarian` is `{ card, desk, voice }`, for the console and scripted checks.
+- **His voice** (`voice.js`, step 4). He says each answer aloud once the visitor has chosen it:
+  the help's "The librarian speaks his answers (in this device's own voice)", after "Show the
+  librarian", or his panel's Voice button ("Voice: off" / "Voice: on", lit when on). It is off at
+  first, kept as `speaks` in `vrlbry:librarian`, and chosen in one place shows in the other.
+  - **Which voice** (`chooseVoice`): only the device's own (`localService`), since a network
+    voice (Chrome's "Google …", Edge's "… Online") would send the answer's words, and so the
+    question's, to its service; English (`lang` en, en-US or en_US alike); a man's known by name
+    first (David, Mark, Daniel, …; not macOS's novelty voices), then the browser's default, then
+    American or British English, else the first. Chrome lists its voices after the page
+    (`voiceschanged`), and the choices follow.
+  - **No voice:** where the device has none (no speech synthesis, as in a TV's WebView, or no
+    English voice of its own), the box is disabled and says "(this device has no English voice of
+    its own)", and the panel's button reads "No voice", disabled.
+  - **What he says:** the answer as the card shows it, a library's "·" read as a pause and its
+    class code ("(P)") left out (`spoken`), at rate 0.95. Choosing it says "I will say my answers
+    aloud.", so it is heard at once.
+  - **Stopped:** by a new question (the card's `onLooking`), the answer taken away, him hidden,
+    unticking it, and leaving the page (`pagehide`). Each answer stops the last.
+  - It sends nothing anywhere, and costs no draw call; the panel is drawn again only as the
+    choice changes.
+  - A screen reader says the answer too (the card's status): with both, it is heard twice.
 - **TV** (§5.9). The help has a row for the librarian on each kind of screen.
   - OK with the dot on him (`useMiddle`) puts the focus in the card's box, held
     (`inputmode="none"`) until OK.
@@ -2490,7 +2512,9 @@ experiment 1: his voice.
     shelf, level, the controls given back, he beside it and then facing the viewer, the line gone,
     the card faded and back; round furniture; a click; in VR, the vignette with the speed, the
     head's own place and turn kept, the blinks (a long way's middle, the end, a click); less
-    motion and him hidden (the cut); a rebuild under it; the walk back, round the viewer.
+    motion and him hidden (the cut); a rebuild under it; the walk back, round the viewer;
+  - his voice: an answer said only once chosen, stopped by a new question, the answer taken away
+    or him hidden; the panel's Voice button (on, off, "No voice").
 
   `test/client-librarian-walk.test.js` covers `path.js` and `walk.js`:
   - the floor: open and closed cells, a footprint exactly, a coarser grid for a large room;
@@ -2499,6 +2523,10 @@ experiment 1: his voice.
   - the eased move, and a walk: he joins, keeps ahead and arrives first, the speeds, the blink in
     VR, at once to the end;
   - his place beside the shelf, his way there, and the line.
+
+  `test/client-librarian-voice.test.js` covers `voice.js`: the voice chosen (the device's own,
+  English, a man's by name, the default, none), the words as said, speaking and stopping over a
+  stand-in for `speechSynthesis`, voices that come later, and no speech synthesis at all.
 
   Checked in headless Chrome with real keys and taps against the demo set (2026-11-07):
   - On a desktop, L put the focus in the box. "What is insulin?" found 5 articles, Insulin first,
@@ -2541,3 +2569,15 @@ experiment 1: his voice.
     to the shelf was a blink, and the volume opened. Draw calls at one pose, both eyes: 34, 36
     with the line.
   - axe: as for step 1.
+
+  Step 4, the same way (2026-11-07), with what he said recorded from `speechSynthesis.speak`:
+  - Chrome on Windows listed Microsoft David, Mark and Zira (the device's own) and, a moment
+    later, Google's network voices; he chose Microsoft David every time.
+  - On a desktop the help's box was off at first. Ticked by a click, it was kept (`speaks: true`)
+    and he said "I will say my answers aloud."; "insulin" asked in the card was answered aloud, in
+    David's voice; a second question stopped it and its own answer was said. Unticked, it was
+    kept off and the next answer was not said; ticked again, it was still ticked after a reload.
+  - In VR his panel's Voice button, by the trigger, went from "Voice: off" to "Voice: on" (lit),
+    and he said the words; "insulin" asked on the panel was answered aloud; pressed again, off.
+  - axe with the help dialog open: on a desktop only `.ov-libs`, as before; nothing on a phone or
+    a TV.
