@@ -102,4 +102,6 @@ These follow the project's own (CLAUDE.md, TODO.md):
   when someone asks one, opted in, and nothing is logged beyond that.
 - **The Quest is the target.** The figure and its panel stay within the draw-call budget, per-frame
   code allocates nothing, and nothing heavy runs in one frame.
-- **English first.**
+- **English to start.** English is the starting focus: the Librarian reads questions as English
+  (`ask.js`), answers in English and speaks with an English voice. Other languages will be tested,
+  and enabled as they become available.

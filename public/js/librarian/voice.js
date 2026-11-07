@@ -4,7 +4,8 @@
 // his answers", off at first: librarian.js). A new question stops the last answer (card.js).
 // - Only a voice of the device's own (`localService`): a network voice (Chrome's "Google …", Edge's
 //   "… Online") would send the answer's words, and so the question's, to its service.
-// - English first: an English voice, a man's where one is known by name (the Librarian is a
+// - English to start (docs/LIBRARIAN.md, ground rules: other languages as they become
+//   available): an English voice, a man's where one is known by name (the Librarian is a
 //   silver-haired man), else the browser's default, else American or British English.
 // - The voices come after the page in Chrome (`voiceschanged`): until then there is none.
 
