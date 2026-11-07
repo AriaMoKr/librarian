@@ -122,6 +122,42 @@ export const idOf = (v) => String(v ?? '').toUpperCase().replace(/[\s[\]()"'`]/g
 /** A tool's argument as text. @param {any} args @param {string} name */
 const arg = (args, name) => String(args?.[name] ?? '').replace(/\s+/g, ' ').trim();
 
+/**
+ * What he is doing, as the card shows it while he reads (read.js onStep): the search's words, or
+ * the title of what he reads (by its id, as the model gave it).
+ * @param {{ name: string, args: any }} step
+ * @param {Map<string, Source>} sources what was shown so far (LibraryTools.sources)
+ * @returns {string}
+ */
+export function stepText({ name, args }, sources) {
+  const q = arg(args, 'query') || arg(args, 'words');
+  const quoted = q ? `“${q}”` : '';
+  /** @param {unknown} id */
+  const what = (id) => {
+    const s = sources.get(idOf(id));
+    if (!s) return 'what he found';
+    return s.in && s.in !== s.title ? `${s.in}: ${s.title}` : s.title;
+  };
+  switch (name) {
+    case 'search_books': {
+      const by = arg(args, 'author');
+      return `Looking in the catalogue for ${quoted ? `${quoted}${by ? ` by ${by}` : ''}` : by ? `books by ${by}` : 'books'}…`;
+    }
+    case 'search_articles':
+      return `Looking for an article on ${quoted || 'it'}…`;
+    case 'search_text':
+      return `Looking through the books’ text for ${quoted || 'it'}…`;
+    case 'read': {
+      const page = Number(args?.page) || 1;
+      return `Reading ${what(args?.id)}${page > 1 ? `, page ${page}` : ''}…`;
+    }
+    case 'find':
+      return `Looking for ${quoted || 'words'} in ${what(args?.id)}…`;
+    default:
+      return 'Looking…';
+  }
+}
+
 /** The tools, for Ollama's /api/chat (`tools`). */
 const DEFS = {
   search_books: {

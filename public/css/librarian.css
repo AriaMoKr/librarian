@@ -25,6 +25,13 @@
 .lb-find-snip b { color: var(--accent); font-weight: 600; }
 .lb-find-go { flex: none; color: var(--accent); font-size: 12px; white-space: nowrap; }
 .lb-pref { margin-top: 8px; }
+.lb-pref[hidden] { display: none; }
+/* His reading (experiment 2): what he is doing meanwhile, one line; each sentence's sources by
+   number, and the sources numbered so. */
+.lb-step { margin: 4px 0 0; color: var(--muted); font-size: 12px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-step[hidden] { display: none; }
+.lb-cite { color: var(--accent); font-size: 10px; line-height: 0; margin-left: 1px; }
+.lb-num { flex: none; min-width: 18px; color: var(--accent); font: 600 13px/1 var(--serif); text-align: center; }
 /* While he leads the way (desk.js) the card, the search and the hint fade, as style.css has them
    while reading: a phone's card would hide the walk, and a click or tap anywhere is there at once. */
 #overlay.lb-walking :is(.ov-card, .ov-search, .ov-hint) { opacity: 0; pointer-events: none !important; }
@@ -50,7 +57,9 @@
 /* A TV (style.css, html.tv): larger, the find with the focus as the search's result. */
 html.tv .lb-label { font-size: 19px; }
 html.tv :is(.lb-q, .lb-answer, .lb-find-title) { font-size: 18px; }
-html.tv :is(.lb-find-line, .lb-find-snip, .lb-find-go, .lb-go) { font-size: 16px; }
+html.tv :is(.lb-find-line, .lb-find-snip, .lb-find-go, .lb-go, .lb-step) { font-size: 16px; }
+html.tv .lb-cite { font-size: 13px; }
+html.tv .lb-num { font-size: 17px; }
 html.tv .lb-find:focus { background: rgba(217, 178, 106, .34); outline: 4px solid #ffd98a; outline-offset: -4px; box-shadow: none; }
 html.tv .lb-find:focus :is(.lb-find-line, .lb-find-go) { color: var(--text); }
 html.tv .lb-find:focus .lb-find-snip b { color: #ffd98a; }

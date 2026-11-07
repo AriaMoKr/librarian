@@ -6,7 +6,8 @@
 // - It must search before it answers: an answer before any search is sent back.
 // - At most MAX_ROUNDS turns; the last offers no tools and asks for the answer.
 // Pure but for the model and the library it is given: the page's (librarian.js, through the
-// server's /api/librarian/chat) and tools/librarian-eval.mjs's.
+// server's /api/librarian/chat: model.js) and tools/librarian-eval.mjs's. answerOf turns a reading
+// into the card's answer (card.js), its sources numbered as the sentences cite them.
 
 import { checkAnswer, NOTHING } from './cite.js';
 import { MAX_CALLS, SYSTEM } from './tools.js';
@@ -187,3 +188,63 @@ export function finish(question, raw, tools, more) {
     ...more,
   };
 }
+
+/** What he says when the model could not be asked or failed, before what the catalogue has. */
+export const CANNOT_READ = 'I cannot read the books just now.';
+
+/**
+ * A source as the card shows it and takes you to it (ask.js Find): a book, an article and a place
+ * in the text as experiment 1's finds; a section or a passage as a place in its book (`passage`),
+ * with the book's cover where the catalogue has one.
+ * @param {import('./tools.js').Source} s
+ * @param {Record<string, any[]> | undefined} booksByLib the catalogue
+ * @returns {import('./ask.js').Find}
+ */
+export function findOf(s, booksByLib) {
+  if (s.kind === 'book') return { kind: 'book', book: s.entry, lib: s.lib };
+  if (s.kind === 'article') return { kind: 'article', article: s.entry, lib: s.lib };
+  if (s.kind === 'text') return { kind: 'text', hit: s.entry, lib: s.lib };
+  const book = (booksByLib?.[s.lib.id] || []).find((b) => b.id === s.book);
+  const title = s.in ?? s.title;
+  return {
+    kind: 'passage',
+    lib: s.lib,
+    bookId: s.book,
+    at: s.at ?? { c: 0, b: 0 },
+    title,
+    section: s.title !== title ? s.title : '',
+    text: s.kind === 'passage' ? s.text : '',
+    // A Wikipedia's volume has its ZIM's creator for an author: no one's to name for an article.
+    author: book?.volume ? '' : book?.author ?? '',
+    cover: book?.cover ?? null,
+  };
+}
+
+/**
+ * The card's answer for a reading (ask.js Answer): his sentences, each with the numbers of its
+ * sources, and the sources as finds in that order; or, when nothing he read says it, NOTHING with
+ * what the catalogue has (experiment 1's answer, `plain`), when it has something.
+ * @param {Reading} reading
+ * @param {import('./ask.js').Answer} plain experiment 1's answer to the same question
+ * @param {Record<string, any[]> | undefined} booksByLib the catalogue
+ * @returns {import('./ask.js').Answer}
+ */
+export function answerOf(reading, plain, booksByLib) {
+  if (reading.nothing) {
+    return { text: plain.finds.length ? `${NOTHING} ${plain.text}` : NOTHING, finds: plain.finds, search: plain.search, reading };
+  }
+  return {
+    text: reading.text,
+    statements: reading.statements,
+    finds: reading.sources.map((s) => findOf(s, booksByLib)),
+    search: null,
+    reading,
+  };
+}
+
+/**
+ * The card's answer when the model could not be asked, or failed: that, and what the catalogue has.
+ * @param {import('./ask.js').Answer} plain experiment 1's answer
+ * @returns {import('./ask.js').Answer}
+ */
+export const couldNotRead = (plain) => ({ ...plain, text: `${CANNOT_READ} ${plain.text}` });

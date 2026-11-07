@@ -5,7 +5,7 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 (CLAUDE.md, "Branches and sites"). These are the proposals, cheapest first, each one something to
 try on its own.
 
-**Built so far** (SPEC §5.10): experiment 1, all four steps, and experiment 2's first step.
+**Built so far** (SPEC §5.10): experiment 1, all four steps, and experiment 2's first two.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -30,13 +30,23 @@ try on its own.
   time; find words in one) and answers in one to three sentences, each citing what it read. Each
   sentence is then held to the citation rule in code, and what fails is struck; with nothing left
   he says "I found nothing that says so." The server forwards each turn to Ollama on the same
-  machine (`--ollama <model>`) and logs nothing. Not yet on the page. Measured with eight models
-  over the 24 questions: gemma4:12b answered all of them right, with nothing struck, in both runs;
-  qwen3:8b and gemma4:26b 23; none made up a source (SPEC §5.10).
+  machine (`--ollama <model>`) and logs nothing. Measured with eight models over the 24
+  questions: gemma4:12b answered all of them right, with nothing struck, in both runs; qwen3:8b
+  and gemma4:26b 23; none made up a source (SPEC §5.10).
+- **Experiment 2, step 2: in the card.** Where the server has a model, the help offers "The
+  librarian reads the books to answer questions", off at first. Chosen, he reads for each
+  question, and meanwhile the card shows what he is doing ("Reading Language: An Introduction to
+  the Study of Speech…"). His sentences carry the numbers of their sources, which are listed under
+  them: a passage with its words, a section, an article or a book. *Take me there* on a passage
+  walks you to its book, which opens at that paragraph. With nothing left he says so and adds
+  what the plain search found; when the model cannot answer he says that and answers as in
+  experiment 1. A newer question stops the reading, at the model too, and the model is warmed up
+  as the box takes the focus. On the static site nothing changes. With gemma4:12b an answer took
+  2.6–3.6 s on the development PC.
 
-Next: experiment 2's step 2, the card: his answer with its sources numbered, each opening its book
-at the paragraph (through his walk), chosen in the help and offered only where the server has a
-model.
+Next: experiment 2's step 3, VR and the voice: his reading checked in a headset (his panel with
+the sources and what he is doing, a question typed on the stand's keyboard, the draw calls, and
+nothing allocated per frame while he reads), and his answers said aloud.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,

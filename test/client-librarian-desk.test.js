@@ -275,6 +275,28 @@ describe('the librarian: at the desk', () => {
     assert.deepEqual(desk.uiState(), {});
   });
 
+  it('shows a reading on his panel: what he does meanwhile, then his sentences and their sources by number', () => {
+    const { desk, card } = room({ presenting: true });
+    desk.open();
+    const p = desk.panel;
+    card.onLooking();
+    card.onStep('Reading Emma…');
+    assert.equal(p.get('answer').text, 'Reading Emma…');
+    card.onStep('');
+    assert.equal(p.get('answer').text, 'Looking…');
+    const read = { kind: 'passage', lib: { id: 'pg', title: 'Gutenberg' }, bookId: '3', at: { c: 0, b: 2 }, title: 'Emma', section: 'Chapter I', text: 'Emma Woodhouse, handsome, clever, and rich.', author: 'Jane Austen', cover: null };
+    const emma = { kind: 'book', book: { id: '3', title: 'Emma', author: 'Jane Austen' }, lib: { id: 'pg', title: 'Gutenberg' } };
+    card.answer = {
+      text: 'Emma was handsome, clever, and rich. Jane Austen wrote it.', finds: [read, emma], search: null,
+      statements: [{ text: 'Emma was handsome, clever, and rich.', cites: [1] }, { text: 'Jane Austen wrote it.', cites: [2] }],
+    };
+    card.onAnswer(card.answer);
+    assert.equal(p.get('answer').text, 'Emma was handsome, clever, and rich. [1] Jane Austen wrote it. [2]');
+    assert.deepEqual(p.get('finds').items.map((i) => [i.label, i.sub]), [['1. Emma', 'Chapter I · Jane Austen'], ['2. Emma', 'Jane Austen']]);
+    card.onStep('Reading Emma…');
+    assert.equal(p.get('answer').text, 'Emma was handsome, clever, and rich. [1] Jane Austen wrote it. [2]', 'a step only while looking');
+  });
+
   it('says his answers once chosen, stops at a new question or hidden, and his panel\'s Voice button chooses it', () => {
     const said = [];
     let on = false;
@@ -381,6 +403,9 @@ describe('the librarian: his walk', () => {
     assert.equal(bookOf({ kind: 'article', article: { book: 'v1', n: 4 }, lib: { id: 'wp' } }, books), books.wp[0]);
     assert.equal(bookOf({ kind: 'text', hit: { to: { book: 'b2' } }, lib: { id: 'ws' } }, books), books.ws[0]);
     assert.equal(bookOf({ kind: 'article', article: { book: 'v9', n: 0 }, lib: { id: 'wp' } }, books), null);
+    // A place he read (experiment 2): its book.
+    const read = { kind: 'passage', lib: { id: 'wp' }, bookId: 'v1', at: { c: 4, b: 2 }, title: 'Insulin', section: '', text: 'Insulin is a hormone.' };
+    assert.equal(bookOf(read, books), books.wp[0]);
   });
 
   it('leads the way to the shelf on a screen: he ahead, the view eased along and turned to it, then the book comes out', async () => {

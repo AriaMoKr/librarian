@@ -136,17 +136,26 @@ export class LibrarianModel {
     this._probeOk = false;
   }
 
-  /** POSTs JSON to Ollama; its JSON answer, or an Error saying what went wrong (no question in it). */
-  async _post(path, body, timeoutMs) {
+  /**
+   * POSTs JSON to Ollama; its JSON answer, or an Error saying what went wrong (no question in it).
+   * @param {string} path
+   * @param {object} body
+   * @param {number} timeoutMs
+   * @param {AbortSignal} [signal] the page stopped asking
+   */
+  async _post(path, body, timeoutMs, signal) {
     let res;
     try {
+      const timeout = AbortSignal.timeout(timeoutMs);
       res = await this._fetch(new URL(path, this.url), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: signal ? AbortSignal.any([timeout, signal]) : timeout,
       });
     } catch (err) {
+      // Nobody waits for the answer: said to no one, and not logged (http.js logs 5xx only).
+      if (signal?.aborted) throw new RequestError(499, 'the page stopped asking');
       const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
       throw new RequestError(timedOut ? 504 : 502, timedOut ? `the model took longer than ${Math.round(timeoutMs / 1000)} s` : `Ollama cannot be reached at ${this.url}`);
     }
@@ -188,8 +197,9 @@ export class LibrarianModel {
    * model's reply ({ role, content, tool_calls? }) and how long it took (s) and how many tokens.
    * A warm-up asks for one token.
    * @param {unknown} body
+   * @param {{ signal?: AbortSignal }} [o] signal: the page stopped asking (the turn is stopped)
    */
-  async chat(body) {
+  async chat(body, { signal } = {}) {
     const { messages, tools, warm } = checkTurn(body);
     const p = await this.probe();
     if (!p.ok) throw new RequestError(503, p.error ?? 'the model cannot answer now');
@@ -201,7 +211,7 @@ export class LibrarianModel {
       keep_alive: KEEP_ALIVE,
       ...(p.think !== undefined ? { think: p.think } : {}),
       options: warm ? { ...OPTIONS, num_predict: 1 } : OPTIONS,
-    }, this._timeoutMs);
+    }, this._timeoutMs, signal);
     const m = reply.message ?? {};
     const calls = Array.isArray(m.tool_calls) ? m.tool_calls.filter((c) => typeof c?.function?.name === 'string')
       .map((c) => ({ function: { name: c.function.name, arguments: isObject(c.function.arguments) ? c.function.arguments : parseArgs(c.function.arguments) } })) : [];

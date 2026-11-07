@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { bookIndex } from '../public/js/search.js';
-import { ask, findLines, MAX_FINDS, parseQuestion, PROMPT, searchesFor } from '../public/js/librarian/ask.js';
+import { ask, citedText, findLines, MAX_FINDS, parseQuestion, PROMPT, searchesFor } from '../public/js/librarian/ask.js';
 import { findList } from '../public/js/librarian/card.js';
 import { fakeDocument, inner, markup } from './helpers/fake-dom.js';
 import './helpers/vendor.js'; // librarian.js → desk.js → the page's ../../vendor/common/panel.js
@@ -248,21 +248,60 @@ describe('librarian: the card', () => {
     assert.match(inner(button), /<span class="lb-nocover"><\/span>/, 'no picture: a blank in its place');
   });
 
-  it('takes you there as the search does', async () => {
+  it('takes you there as the search does; to a place he read, its book open there', async () => {
     const calls = [];
     const interaction = {
       searchPick: (...a) => calls.push(['searchPick', ...a]),
       openArticle: (...a) => calls.push(['openArticle', ...a]),
       openText: (...a) => calls.push(['openText', ...a]),
+      openAt: (...a) => calls.push(['openAt', ...a]),
     };
     const [moby] = (await ask('Moby Dick', library())).finds;
     const [paris] = (await ask('Paris', library())).finds;
     const [text] = (await ask('call me ishmael', library())).finds;
-    for (const find of [moby, paris, text]) takeThere(interaction, find);
+    for (const find of [moby, paris, text, PASSAGE]) takeThere(interaction, find);
     assert.deepEqual(calls, [
       ['searchPick', booksByLib.pg[0], { take: true }],
       ['openArticle', 'wp', 'v1', 3],
       ['openText', 'pg', HITS[0]],
+      ['openAt', 'pg', '9', { c: 0, b: 2 }],
     ]);
   });
+
+  it('shows a place he read: its book, section and words, numbered as his sentences cite it', () => {
+    assert.deepEqual(findLines(PASSAGE, true), {
+      title: 'The Story of the Alphabet', line: 'Preface · Edward Clodd · Gutenberg', snippet: [['“The story of the alphabet is told here.”', false]],
+    });
+    // A long one cut at a word; a section has no words of its own.
+    const long = findLines({ ...PASSAGE, text: 'word '.repeat(100).trim(), section: '', author: '' }, false);
+    assert.equal(long.line, '');
+    assert.match(long.snippet?.[0][0] ?? '', /^“(word ){40,}word…”$/);
+    assert.ok((long.snippet?.[0][0].length ?? 0) <= 244);
+    assert.equal(findLines({ ...PASSAGE, text: '' }, false).snippet, null);
+    const taken = [];
+    const list = findList(fakeDocument(), [PASSAGE, { kind: 'book', book: booksByLib.pg[1], lib: pg }], { multi: false, numbered: true, take: (find) => taken.push(find) });
+    assert.equal(list.getAttribute('aria-label'), 'Where the librarian read it');
+    const buttons = list.findAll((el) => el.tagName === 'BUTTON');
+    assert.equal(inner(buttons[0]), '<span class="lb-num">1</span><img class="lb-cover" alt="" width="34" height="48" data-src="zim/pg/covers/9.jpg">'
+      + '<span class="lb-find-text"><span class="lb-find-title">The Story of the Alphabet</span><span class="lb-find-line">Preface · Edward Clodd</span>'
+      + '<span class="lb-find-snip">“The story of the alphabet is told here.”</span></span><span class="lb-find-go">Take me there</span>');
+    assert.match(inner(buttons[1]), /^<span class="lb-num">2<\/span><span class="lb-nocover"><\/span>/);
+    buttons[0].click();
+    assert.deepEqual(taken, [PASSAGE]);
+    // Without a cover, a place in a book shows its library's picture.
+    const [icon] = findList(fakeDocument(), [{ ...PASSAGE, lib: wp, cover: null }], { multi: false, take: () => {} }).findAll((el) => el.tagName === 'IMG');
+    assert.equal(markup(icon), '<img class="lb-icon" alt="" width="34" height="34" data-src="zim/wp/icon.png">');
+  });
+
+  it('gives a reading with its sources\' numbers where only text shows them (his panel)', () => {
+    const statements = [{ text: 'It was told in 1891.', cites: [1] }, { text: 'Clodd wrote it.', cites: [2, 1] }, { text: 'Uncited.', cites: [] }];
+    assert.equal(citedText({ text: 'It was told in 1891. Clodd wrote it. Uncited.', finds: [], search: null, statements }), 'It was told in 1891. [1] Clodd wrote it. [2, 1] Uncited.');
+    assert.equal(citedText({ text: 'I have Emma.', finds: [], search: null }), 'I have Emma.');
+  });
 });
+
+/** A place the librarian read (read.js findOf). */
+const PASSAGE = {
+  kind: 'passage', lib: pg, bookId: '9', at: { c: 0, b: 2 }, title: 'The Story of the Alphabet', section: 'Preface',
+  text: 'The story of the alphabet is told here.', author: 'Edward Clodd', cover: 'zim/pg/covers/9.jpg',
+};

@@ -293,7 +293,8 @@ export function createApp(library, { publicDir = DEFAULT_PUBLIC_DIR, vendorDirs 
         res.setHeader('Allow', 'GET, HEAD');
         return sendError(req, res, 405, 'method not allowed');
       }
-      return librarian ? reply(await librarian.info()) : none();
+      // Without a model, that (no 404: the page asks on every load, and a browser logs a 404).
+      return reply(librarian ? await librarian.info() : { model: null, ready: false });
     }
     if (segs.length === 1 && segs[0] === 'chat') {
       if (req.method !== 'POST') {
@@ -313,7 +314,12 @@ export function createApp(library, { publicDir = DEFAULT_PUBLIC_DIR, vendorDirs 
       } catch {
         throw new RequestError(400, 'the request is not JSON');
       }
-      return reply(await librarian.chat(body));
+      // A page that stops asking (a newer question, the page closed) stops the model's turn too.
+      const stop = new AbortController();
+      res.on('close', () => {
+        if (!res.writableFinished) stop.abort();
+      });
+      return reply(await librarian.chat(body, { signal: stop.signal }));
     }
     return sendError(req, res, 404, 'unknown API endpoint');
   }

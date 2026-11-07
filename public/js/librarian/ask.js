@@ -261,9 +261,28 @@ function within(promise, ms) {
 }
 
 /**
- * @typedef {{ kind: 'book', book: any, lib: any } | { kind: 'article', article: any, lib: any } | { kind: 'text', hit: any, lib: any }} Find
- *   something found: a book, an article of a Wikipedia (search.js findArticles), or a place in a
- *   book's text (findInText)
+ * A place in a book or an article that the Librarian read (experiment 2: read.js findOf): its
+ * section or its paragraph.
+ * @typedef {object} Passage
+ * @property {'passage'} kind
+ * @property {any} lib
+ * @property {string} bookId its book (an article's volume)
+ * @property {{ c: number, b: number }} at where it is in the book
+ * @property {string} title the book's or the article's title
+ * @property {string} section the section's heading ('' for none)
+ * @property {string} text what it says ('' for a section)
+ * @property {string} [author] the book's author
+ * @property {string | null} [cover] the book's cover
+ */
+
+/**
+ * @typedef {{ kind: 'book', book: any, lib: any } | { kind: 'article', article: any, lib: any } | { kind: 'text', hit: any, lib: any }} SearchFind
+ *   something a search found: a book, an article of a Wikipedia (search.js findArticles), or a
+ *   place in a book's text (findInText)
+ */
+
+/**
+ * @typedef {SearchFind | Passage} Find something found: by a search, or a place the Librarian read
  */
 
 /**
@@ -272,7 +291,7 @@ function within(promise, ms) {
  * @property {Array<{ book: any, lib: any }>} books every book
  * @property {Array<{ article: any, lib: any }>} articles
  * @property {Array<{ hit: any, lib: any }>} texts
- * @property {Find[]} finds the ones the answer lists
+ * @property {SearchFind[]} finds the ones the answer lists
  */
 
 /**
@@ -283,14 +302,14 @@ function within(promise, ms) {
  * @param {Found['books']} books
  * @param {Found['articles']} articles
  * @param {Found['texts']} texts
- * @returns {Find[]}
+ * @returns {SearchFind[]}
  */
 export function chooseFinds(search, books, articles, texts) {
-  /** @type {Find[]} */
+  /** @type {SearchFind[]} */
   const b = books.map(({ book, lib }) => ({ kind: 'book', book, lib }));
-  /** @type {Find[]} */
+  /** @type {SearchFind[]} */
   const a = articles.map(({ article, lib }) => ({ kind: 'article', article, lib }));
-  /** @type {Find[]} */
+  /** @type {SearchFind[]} */
   const t = texts.map(({ hit, lib }) => ({ kind: 'text', hit, lib }));
   if (search.wants === 'book') return b.slice(0, MAX_FINDS);
   if (search.wants === 'article') return [...a, ...b, ...t].slice(0, MAX_FINDS);
@@ -408,9 +427,12 @@ export function answerText(found, libraries) {
 
 /**
  * @typedef {object} Answer
- * @property {string} text what the librarian says
- * @property {Find[]} finds what it found, at most MAX_FINDS, the best first
+ * @property {string} text what the librarian says (as his voice says it: without numbers)
+ * @property {Find[]} finds what it found, at most MAX_FINDS, the best first; a reading's sources
  * @property {Search | null} search the search that found them (the first one tried when none did)
+ * @property {Array<{ text: string, cites: number[] }>} [statements] a reading's sentences (read.js
+ *   answerOf), each with the numbers of its sources: finds[n - 1]
+ * @property {any} [reading] the reading behind it, for the console and scripted checks
  */
 
 /**
@@ -449,5 +471,27 @@ export function findLines(find, multi) {
     const { title, from, book } = find.article;
     return { title: from ? `${from} → ${title}` : String(title), line: `${find.lib.title} · Volume ${String(book).slice(1)}`, snippet: null };
   }
+  if (find.kind === 'passage') {
+    // Its book and section, and what it says, quoted (cut: the card shows two lines of it).
+    const text = find.text.length > PASSAGE_SHOWN ? `${find.text.slice(0, PASSAGE_SHOWN).replace(/\s+\S*$/, '')}…` : find.text;
+    return {
+      title: find.title,
+      line: [find.section, find.author, multi ? find.lib.title : null].filter(Boolean).join(' · '),
+      snippet: text ? /** @type {Array<[string, boolean]>} */ ([[`“${text}”`, false]]) : null,
+    };
+  }
   return { title: String(find.hit.title ?? ''), line: [find.hit.author, find.lib.title].filter(Boolean).join(' · '), snippet: find.hit.snippet ?? null };
+}
+
+/** How much of a passage a find shows: two lines of the card, or of his panel's list. */
+const PASSAGE_SHOWN = 240;
+
+/**
+ * What the librarian says, with a reading's sources as numbers ("… 1921. [1]"), where they are
+ * shown in text alone (his panel in VR); the answer's text as it is otherwise.
+ * @param {Answer} answer
+ */
+export function citedText(answer) {
+  if (!answer.statements) return answer.text;
+  return answer.statements.map((s) => (s.cites.length ? `${s.text} [${s.cites.join(', ')}]` : s.text)).join(' ');
 }

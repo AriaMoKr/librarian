@@ -13,8 +13,9 @@ const SYSTEM = { role: 'system', content: 'You are the Librarian.' };
 const USER = { role: 'user', content: 'Who wrote Emma?' };
 const TOOL = { type: 'function', function: { name: 'search_books', description: 'Find books.', parameters: { type: 'object', properties: { query: { type: 'string' } } } } };
 
-/** `p`, or the signal's reason once it aborts (as fetch does). */
+/** `p`, or the signal's reason once it aborts, or at once when it has (as fetch does). */
 const abortable = (p, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) return reject(signal.reason);
   signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
   Promise.resolve(p).then(resolve, reject);
 });
@@ -129,6 +130,9 @@ describe('the model (LibrarianModel)', () => {
     await fails(fakeOllama({ chat: () => new Response('{"error":"out of memory"}', { status: 500 }) }), 502, /500: out of memory/);
     await fails(fakeOllama({ chat: () => { throw new TypeError('fetch failed'); } }), 502, /cannot be reached/);
     await fails(fakeOllama({ chat: (b) => new Promise(() => {}) }), 504, /longer than/);
+    // The page stopped asking: the turn stops, said to no one.
+    const stopped = new LibrarianModel({ model: 'gemma4:12b', fetch: fakeOllama({ chat: () => new Promise(() => {}) }).fetch });
+    await assert.rejects(stopped.chat({ messages: [USER] }, { signal: AbortSignal.abort() }), (e) => e.status === 499 && /stopped asking/.test(e.message));
     const down = new LibrarianModel({ model: 'm', fetch: async () => { throw new TypeError('fetch failed'); } });
     assert.deepEqual(await down.info(), { model: 'm', ready: false, error: 'Ollama cannot be reached at http://127.0.0.1:11434/' });
   });
@@ -163,9 +167,11 @@ describe('/api/librarian (createApp)', () => {
     assert.equal(res.headers.get('cache-control'), 'no-store');
     assert.deepEqual(await res.json(), { model: 'gemma4:12b', ready: true });
     const none = await fetch(url(without, '/api/librarian'));
-    assert.equal(none.status, 404);
-    assert.match((await none.json()).error, /--ollama/);
-    assert.equal((await post(without, { messages: [USER] })).status, 404);
+    assert.equal(none.status, 200);
+    assert.deepEqual(await none.json(), { model: null, ready: false });
+    const unasked = await post(without, { messages: [USER] });
+    assert.equal(unasked.status, 404);
+    assert.match((await unasked.json()).error, /--ollama/);
   });
 
   it('answers a turn through Ollama', async () => {
@@ -187,6 +193,34 @@ describe('/api/librarian (createApp)', () => {
     assert.equal(get.headers.get('allow'), 'POST');
     assert.equal((await fetch(url(withModel, '/api/librarian'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status, 405);
     assert.equal((await fetch(url(withModel, '/api/librarian/other'))).status, 404);
+  });
+
+  it('stops the model\'s turn when the page stops asking, and logs nothing', async () => {
+    /** @type {AbortSignal | undefined} */
+    let turn;
+    const started = Promise.withResolvers();
+    const ollamaFetch = async (u, init) => {
+      if (new URL(u).pathname === '/api/show') return new Response(JSON.stringify({ capabilities: ['tools'] }), { status: 200 });
+      turn = init.signal;
+      started.resolve();
+      return abortable(new Promise(() => {}), init.signal); // a turn that takes its time
+    };
+    const logged = [];
+    const server = await listen(createApp(library, { librarian: new LibrarianModel({ model: 'gemma4:12b', fetch: ollamaFetch }), log: (m) => logged.push(m) }));
+    try {
+      const page = new AbortController();
+      const asking = fetch(url(server, '/api/librarian/chat'), {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: [USER] }), signal: page.signal,
+      }).catch((e) => e);
+      await started.promise;
+      page.abort();
+      assert.equal((await asking).name, 'AbortError');
+      await new Promise((resolve) => (turn?.aborted ? resolve() : turn?.addEventListener('abort', resolve)));
+      assert.equal(turn?.aborted, true);
+      assert.deepEqual(logged, []);
+    } finally {
+      server.close();
+    }
   });
 });
 

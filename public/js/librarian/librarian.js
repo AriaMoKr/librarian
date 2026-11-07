@@ -10,18 +10,28 @@
 // - the L key, and on a screen the figure, which put you in his question box; Enter or Esc while
 //   he leads the way, which is there at once;
 // - on a TV, Menu landing on his Ask;
-// - his question in the page's state (debug reports, scenes).
+// - his question in the page's state (debug reports, scenes);
+// - his reading (experiment 2): where the server has a model (model.js; never asked on a static
+//   site) and it is chosen in the help ("The librarian reads the books…", off at first), a
+//   question goes to it, which reads the library through the tools (tools.js, over search.js and
+//   api.js) and answers with what it read (read.js, cite.js); the answer's sources are its finds.
+//   Nothing he read says it, or the model failed: what the catalogue has (experiment 1's answer).
+//   The model is warmed up as the question box takes the focus.
 // Experiment 1: step 1, the words in the card; step 2, the figure and his panel; step 3, the walk;
-// step 4, his voice.
+// step 4, his voice. Experiment 2: step 2, his reading in the card.
 
+import { findText, getBookMeta, getChunk } from '../api.js';
 import { bookIndex, findArticles, findInText } from '../search.js';
 import { load, save } from '../util/storage.js';
-import { ask, MAX_FINDS } from './ask.js';
-import { LibrarianCard } from './card.js';
+import { ask, MAX_FINDS, parseQuestion } from './ask.js';
+import { FAILED, LibrarianCard } from './card.js';
 import { Desk } from './desk.js';
+import { ServerModel } from './model.js';
+import { answerOf, couldNotRead, readFor, warmTurn } from './read.js';
+import { LibraryTools, stepText } from './tools.js';
 import { Voice } from './voice.js';
 
-/** Its storage key (util/storage.js): { shown, speaks }. */
+/** Its storage key (util/storage.js): { shown, speaks, reads }. */
 const KEY = 'librarian';
 /** What he says as his voice is chosen, so it is heard at once. */
 const VOICE_ON = 'I will say my answers aloud.';
@@ -29,13 +39,14 @@ const VOICE_ON = 'I will say my answers aloud.';
 /**
  * Takes the visitor to a find, as the search's results do: a book to its shelf and into their
  * hands (interaction.searchPick), an article's volume open at it (openArticle), a book open where
- * its text holds the words (openText).
- * @param {{ searchPick: Function, openArticle: Function, openText: Function }} interaction
+ * its text holds the words (openText); a place he read, its book open there (openAt).
+ * @param {{ searchPick: Function, openArticle: Function, openText: Function, openAt: Function }} interaction
  * @param {import('./ask.js').Find} find
  */
 export function takeThere(interaction, find) {
   if (find.kind === 'book') return interaction.searchPick(find.book, { take: true });
   if (find.kind === 'article') return interaction.openArticle(find.lib.id, find.article.book, find.article.n);
+  if (find.kind === 'passage') return interaction.openAt(find.lib.id, find.bookId, find.at);
   return interaction.openText(find.lib.id, find.hit);
 }
 
@@ -62,15 +73,55 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     const { libraries, booksByLib } = catalogue();
     return libraries.filter((/** @type {{ id: string }} */ l) => booksByLib[l.id]?.length).length > 1;
   };
-  const card = new LibrarianCard({
-    ask: async (text) => {
+  // His reading (experiment 2): the server's model, where it has one. A static site has none.
+  const model = interaction.staticSite ? null : new ServerModel();
+  /** @type {import('./model.js').ModelInfo | null} what the server said of it (null: none) */
+  let modelInfo = null;
+  /** Whether he reads for his answers: chosen, and the model can answer. */
+  const reads = () => !!prefs.reads && !!modelInfo?.ready;
+  /** The library as the model's tools read it: the page's own searches and reading. @type {import('./tools.js').Access} */
+  const access = {
+    libraries: () => catalogue().libraries,
+    index: () => {
       const { libraries, booksByLib } = catalogue();
-      return ask(text, {
+      return bookIndex(libraries, booksByLib);
+    },
+    articles: (q, perLibrary) => findArticles(catalogue().libraries, q, perLibrary),
+    texts: (q, perLibrary) => findInText(catalogue().libraries, q, perLibrary),
+    meta: (libId, bookId) => getBookMeta(libId, bookId),
+    chunk: (libId, bookId, n) => getChunk(libId, bookId, n),
+    place: (libId, hit) => findText(libId, hit),
+  };
+  const card = new LibrarianCard({
+    ask: async (text, { signal, onStep }) => {
+      const { libraries, booksByLib } = catalogue();
+      // What the catalogue has (experiment 1): his answer without reading, and when reading finds nothing.
+      const plain = ask(text, {
         libraries,
         index: () => bookIndex(libraries, booksByLib), // the search box's, made at the first search
         findArticles: (q) => findArticles(libraries, q, MAX_FINDS + 1), // one more than shown: "and more"
         findInText: (q) => findInText(libraries, q, MAX_FINDS + 1),
+      }).catch((err) => {
+        console.warn('[librarian] ask', err);
+        return { text: FAILED, finds: [], search: null };
       });
+      // A greeting, or nothing asked yet: what to ask him, without the model.
+      if (!model || !reads() || parseQuestion(text).empty) return plain;
+      const tools = new LibraryTools(access);
+      let reading;
+      try {
+        reading = await readFor(text, {
+          chat: (messages, defs, o) => model.chat(messages, defs, o),
+          tools,
+          onStep: (step) => onStep(stepText(step, tools.sources)),
+          signal,
+        });
+      } catch (err) {
+        if (signal.aborted) throw err; // a newer question
+        console.warn('[librarian] reading', /** @type {Error} */ (err)?.message ?? err);
+        return couldNotRead(await plain);
+      }
+      return answerOf(reading, await plain, booksByLib);
     },
     // With him: he leads the way there (made below; the card's buttons are pressed only after).
     take: (find) => desk.takeThere(find),
@@ -122,7 +173,7 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   };
   const desk = new Desk({ interaction, card, take, multi, intoBox, onWalk, speech });
   // For the console and scripted checks: __vrlbry.interaction.librarian.
-  interaction.librarian = { card, desk, voice };
+  interaction.librarian = { card, desk, voice, model };
   // Out of VR his panel goes: on a screen the card is his.
   interaction.renderer?.xr?.addEventListener?.('sessionend', () => desk.close());
 
@@ -172,6 +223,50 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   voice.onChange = showVoice;
   showVoice();
   window.addEventListener('pagehide', () => voice.stop());
+
+  // "The librarian reads the books to answer questions", after it: shown only where the server has
+  // a model, off at first; disabled, with why, while the model cannot answer.
+  const readPref = document.createElement('label');
+  readPref.className = 'ov-update-pref lb-pref';
+  readPref.hidden = true;
+  readPref.innerHTML = '<input type="checkbox"> <span></span>';
+  voicePref.after(readPref);
+  const readBox = /** @type {HTMLInputElement} */ (readPref.querySelector('input'));
+  const readText = /** @type {HTMLElement} */ (readPref.querySelector('span'));
+  const showReads = () => {
+    card.setReading(reads());
+    readPref.hidden = !modelInfo;
+    if (!modelInfo) return;
+    readBox.disabled = !modelInfo.ready;
+    readBox.checked = reads();
+    readText.textContent = modelInfo.ready
+      ? `The librarian reads the books to answer questions, and says where he read it (with ${modelInfo.model}, on this site’s server)`
+      : `The librarian reads the books to answer questions (${modelInfo.model} cannot answer just now${modelInfo.error ? `: ${modelInfo.error}` : ''})`;
+  };
+  /** What the server says of its model now. */
+  const askAboutModel = async () => {
+    if (!model) return;
+    modelInfo = await model.info();
+    showReads();
+  };
+  /**
+   * The model loaded and its instructions read before the first question (at most every 10
+   * minutes: model.js), as the box takes the focus or reading is chosen; a model that could not
+   * answer is asked about again first.
+   */
+  const warmUp = async () => {
+    if (!model) return;
+    if (modelInfo && !modelInfo.ready && model.mayAskAgain) await askAboutModel();
+    if (reads()) model.warm(warmTurn(new LibraryTools(access)));
+  };
+  readBox.onchange = () => {
+    prefs.reads = readBox.checked;
+    save(KEY, prefs);
+    showReads();
+    warmUp();
+  };
+  card.input.addEventListener('focus', () => warmUp());
+  askAboutModel();
 
   // L: into the question box, from the view (not from a field, a dialog or the text view, nor in
   // VR). Before the view's own keys (controls.js, on window), which leave a key alone once it is

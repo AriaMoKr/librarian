@@ -24,7 +24,7 @@ import * as THREE from 'three';
 import { VIGNETTE } from '../../vendor/common/access.js';
 import { Panel, UI } from '../../vendor/common/panel.js';
 import { perf } from '../perf.js';
-import { findLines, PROMPT } from './ask.js';
+import { citedText, findLines, PROMPT } from './ask.js';
 import { Figure, FIGURE, rayUpright } from './figure.js';
 import { along, Floor, pathLengths } from './path.js';
 import { aheadWay, besideEnd, Walk, WALK, WayLine } from './walk.js';
@@ -98,7 +98,7 @@ function angleDiff(a, b) {
  */
 export function bookOf(find, booksByLib) {
   if (find.kind === 'book') return find.book;
-  const id = find.kind === 'article' ? find.article.book : find.hit.to.book;
+  const id = find.kind === 'article' ? find.article.book : find.kind === 'passage' ? find.bookId : find.hit.to.book;
   return (booksByLib?.[find.lib.id] || []).find((b) => b.id === id) ?? null;
 }
 
@@ -199,6 +199,10 @@ export class Desk {
       if (answer && this.shown && this.speech?.on()) this.speech.say(answer.text);
       else if (!answer) this.speech?.stop();
       this._refill();
+    };
+    // What he is doing while he reads (experiment 2), on his panel as in the card.
+    card.onStep = (step) => {
+      if (this._looking && this.panel.visible) this.panel.set('answer', { text: step || 'Looking…' });
     };
     this._place();
   }
@@ -672,18 +676,20 @@ export class Desk {
     p.add({ id: 'ask', type: 'button', x: pad + 8 * (kw + gap), y, w: 2 * (kw + gap) - gap, h: kh, label: 'Ask', size: 26, active: !!this.q.trim(), onClick: () => this.askNow() });
     y += kh + 22;
     const answer = this.card.answer;
-    const said = this._looking ? 'Looking…' : answer ? answer.text : PROMPT;
+    // A reading's sentences with their sources' numbers, which number the list (ask.js citedText).
+    const said = this._looking ? this.card.step || 'Looking…' : answer ? citedText(answer) : PROMPT;
     p.add({ id: 'answer', type: 'text', x: pad, y, w: W - 2 * pad, h: 104, text: said, size: 28, maxLines: 3, color: !this._looking && answer ? UI.text : UI.muted });
     y += 112;
     const finds = !this._looking && answer ? answer.finds : [];
     if (!finds.length) return;
     const multi = this.multi();
+    const numbered = !!answer?.statements;
     p.add({
       id: 'finds', type: 'list', x: pad, y, w: W - 2 * pad, h: p.h - y - 30, rowH: 70, size: 26,
-      items: finds.map((find) => {
+      items: finds.map((find, i) => {
         const { title, line } = findLines(find, multi);
         return {
-          label: title, sub: line, right: 'Take me there',
+          label: numbered ? `${i + 1}. ${title}` : title, sub: line, right: 'Take me there',
           onClick: () => {
             this.close();
             this.takeThere(find);

@@ -920,7 +920,8 @@ node server/index.js [--dir <path>] [--port 8080] [--host 0.0.0.0] [--https] [--
   must be able to call tools: Ollama's `/api/show` says so (it loads nothing), asked at the start
   and, while it fails, again 10 s later. The start prints "The librarian answers with <model>
   through Ollama at <url>", or on stderr why he cannot yet ("Ollama cannot be reached at …", "the
-  model … cannot call tools"); the server runs either way. Without it there are no such routes.
+  model … cannot call tools"); the server runs either way. Without it, `GET /api/librarian` says
+  there is no model, and there is no chat route (§4).
 - `--dir` defaults to `process.cwd()`. **Conventional ports: HTTP 8080 (`--port`), HTTPS 8443
   (`--https-port`).** `--https` (also implied by `--https-port`, `--cert`/`--key`) adds the HTTPS
   listener next to plain HTTP: one process, one shared `Library`, two servers; `--no-http` keeps
@@ -1043,10 +1044,11 @@ copy of this file)"). Copies once shared a checkpoint: one's removal ran while t
 dotfiles skipped), walked on every request since the files may change while the server runs.
 `Cache-Control: no-store`.
 
-**`GET /api/librarian`** (with `--ollama`, §3.7; 404 `{ "error": "no model here (the server runs
-without --ollama)" }` without, and on the static site) → `{ "model": "gemma4:12b", "ready": true }`,
-or `"ready": false` with `"error"` while Ollama cannot be reached, has no such model or the model
-cannot call tools. `Cache-Control: no-store`. Other methods → 405.
+**`GET /api/librarian`** (§3.7) → `{ "model": "gemma4:12b", "ready": true }`, or `"ready": false`
+with `"error"` while Ollama cannot be reached, has no such model or the model cannot call tools.
+Without `--ollama`, `{ "model": null, "ready": false }`: not a 404, since the page asks on every
+load and a browser logs every 404. The static site has no such file, and its page never asks
+(§5.10). `Cache-Control: no-store`. Other methods → 405.
 
 **`POST /api/librarian/chat`** (with `--ollama`, 404 without) → one turn of the Librarian's reading
 (§5.10, `librarian/read.js`), forwarded to Ollama's `/api/chat` with the server's model and
@@ -1070,7 +1072,9 @@ object, also where the model wrote them as JSON text). Errors: 400 (not such a t
 JSON), 403 (the browser says another site's page sent it: `Sec-Fetch-Site` neither `same-origin`
 nor `none`), 405 (not a POST, `Allow: POST`), 413 (too large), 415 (not JSON), 502 (Ollama cannot
 be reached, has no such model, or failed: its status and error), 503 (the model cannot call tools),
-504 (no reply within 3 minutes). Neither the questions nor the answers are logged, and an error
+504 (no reply within 3 minutes). A turn the page stops waiting for (a newer question cancels its
+request, and the connection closes) is stopped at Ollama too, and goes unanswered (499, not
+logged). Neither the questions nor the answers are logged, and an error
 says what failed, never what was asked. A JSON body makes a browser ask before another site's page
 may send it (CORS), and nothing here allows that.
 
@@ -1207,7 +1211,7 @@ public/
     scene.js             scenes: sceneOf / restoreScene / saveScene / savedScene / parseScene (one saved in the browser).
     perf-scenarios.js    built-in performance scenarios, loaded only by perf.run().
     librarian/ask.js     the librarian (§5.10): a question → searches → an answer and its finds (pure).
-    librarian/card.js    its part of the library card: the question box, the answer, the finds.
+    librarian/card.js    its part of the library card: the question box, the answer (its sentences' numbers), what he is doing, the finds.
     librarian/figure.js  his figure: simple shapes in one mesh with one material; rayUpright (pointing at him).
     librarian/desk.js    Desk: the figure beside the stand (place, collider, turning), in VR his panel, and his walk (takeThere).
     librarian/path.js    Floor: a room's floor as a grid, ways across it round what stands there (A*); along a way.
@@ -1216,7 +1220,8 @@ public/
     librarian/tools.js   LibraryTools: the library as a model's tools (search, read, find), all it showed kept by id (pure but for the library).
     librarian/read.js    readFor: a model reads for a question through the tools, turn by turn; finish: its answer held to the rule (pure).
     librarian/cite.js    the citation rule: checkAnswer keeps the sentences that what they cite says (pure).
-    librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choice.
+    librarian/model.js   ServerModel: the server's model as the page reaches it (§4): which one, a turn, the warm-up.
+    librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choices, his reading.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
 ```
 
@@ -2359,15 +2364,16 @@ call (`startLibrarian({ overlay, interaction, tv })`), the overlay gives them tw
 Built so far: experiment 1, all four steps (2026-11-07), with no model: the words in the card, the
 figure beside the stand with his panel in VR, his walk to the book, and his voice. Experiment 2's
 step 1 (2026-11-07): his reading with a model of Ollama's, its citation rule and the server's route
-to Ollama, measured over 24 questions (Answers with citations, below); not yet on the page.
+to Ollama, measured over 24 questions; and its step 2 (2026-11-07): his reading in the card, where
+the server has a model and it is chosen (Answers with citations, below).
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
-  the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks }` (kept whole) and on
-  until unticked. Unticked, the card is as it was without him, L does nothing, and he is not in
-  the room: not drawn, not pointed at, his collider gone, his panel closed and his voice stopped.
+  the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks, reads }` (kept whole)
+  and on until unticked. Unticked, the card is as it was without him, L does nothing, and he is not
+  in the room: not drawn, not pointed at, his collider gone, his panel closed and his voice stopped.
   - A question is answered by the library's own searches (`search.js`, §5.6), through the
     server's API or the local worker, as a search typed in the overlay is. Nothing else is sent
-    anywhere.
+    anywhere, unless his reading is chosen (`reads`: Answers with citations, below).
 - **The question** (`ask.js`, pure, English). `parseQuestion` first takes off:
   - openers: "Can you find me", "Do you have", "I'm looking for", "Where is", "Who wrote",
     greetings, …;
@@ -2668,7 +2674,8 @@ to Ollama, measured over 24 questions (Answers with citations, below); not yet o
 
 A language model reads the library for an answer, and the answer keeps only what a source it read
 says (docs/LIBRARIAN.md). Step 1 (2026-11-07) is the reading, its tools, the citation rule and
-the server's route to the model; the page does not use them yet (step 2: the card).
+the server's route to the model; step 2 (2026-11-07) puts them in the card (On the page, below).
+Step 3 is VR and the voice.
 
 - **The model** is one of Ollama's on the server's machine (`--ollama <model>`, §3.7), through
   `POST /api/librarian/chat` (§4): the page holds the conversation and runs the tools, the server
@@ -2737,6 +2744,40 @@ the server's route to the model; the page does not use them yet (step 2: the car
      its sources do not make");
   7. of its other words of 4 letters or more (not about the sources: "book", "says", "wrote"),
      when there are 2 or more, fewer than half are there ("says more than its sources").
+- **On the page** (step 2: `model.js`, `librarian.js`, `card.js`, `desk.js`):
+  - The help's choice "The librarian reads the books to answer questions, and says where he read
+    it (with gemma4:12b, on this site’s server)", after the voice's, is shown only where the server
+    has a model (`ServerModel.info`, `GET /api/librarian`; the static site's page never asks:
+    `interaction.staticSite`). It is off at first and kept as `reads`. While the model cannot
+    answer it is disabled and says why ("gemma4:12b cannot answer just now: …"), and the server
+    is asked again as the box takes the focus, at most every 10 s (`mayAskAgain`). Chosen, the
+    box's hint asks for a question too: "A question, a title, an author or a subject".
+  - The warm-up (`ServerModel.warm` with `warmTurn`) goes as reading is chosen and as the box
+    takes the focus, at most every 10 minutes (`WARM_EVERY`); after a failed one, the next focus
+    tries again.
+  - A question is answered as in experiment 1 (`ask`) and, at the same time, read for: `readFor`
+    over `LibraryTools`, whose `Access` is the page's own searches and reading (search.js,
+    api.js), with the server's model (`ServerModel.chat`). A question in which experiment 1 finds
+    nothing to look for (a greeting: `parseQuestion`) is its alone, with no model. The answer
+    (`answerOf`):
+    - the sentences kept, each followed by the numbers of its sources (`sup.lb-cite`, seen, not
+      said: the list under the answer is numbered and named "Where the librarian read it"). The
+      finds are the sources in the order first cited (`findOf`): a book, an article, a hit, or a
+      place in a book or an article (a section, a passage: `kind: 'passage'`, with its title, its
+      section, the book's author (not a Wikipedia volume's), its library, the passage's words up
+      to 240 characters, and the book's cover or else the library's picture). "Take me there" on a
+      place goes through his walk and opens its book at its block (`interaction.openAt`);
+    - with nothing left, "I found nothing that says so.", followed by experiment 1's answer and
+      finds when it has any;
+    - when the model cannot be reached or fails, "I cannot read the books just now." followed by
+      experiment 1's answer and finds (`couldNotRead`).
+  - Meanwhile what he is doing shows under the box (`stepText`: "Looking in the catalogue for
+    “Language”…", "Reading Language: An Introduction to the Study of Speech…"), seen, not said
+    (`aria-hidden`; the status says "Looking…" once), and on his panel in VR. A newer question, or
+    the answer taken away, stops the reading: its request is cancelled, and the server stops the
+    model's turn (§4).
+  - In VR his panel shows the answer with its numbers in brackets (`citedText`) and its sources
+    numbered; his voice says the sentences without the numbers.
 - **The evaluation** (`tools/librarian-eval.mjs`, `tools/librarian-questions.json`): 24
   questions over the demo set (`tools/demo-set.txt`), 4 with no answer there. Each model is
   warmed up (timed) and each question read as the page would, with the server in the same
@@ -2783,8 +2824,32 @@ the server's route to the model; the page does not use them yet (step 2: the car
   contents, a section, an article to its own end and its sections, find, the full text read from
   its place, failures said); the sentences and their ids; each rule, kept and struck; the reading
   with a scripted model (calls run and sent back, search first, the last turn, calls written as
-  text, at most 4 calls, stopping, the warm-up, nothing left). `test/librarian-server.test.js`
-  covers the turn checked and copied, the model's settings and thinking, tool calls' arguments,
-  failures (no tools, no such model, Ollama's errors, unreachable, too slow) said without the
-  question, the routes (`createApp`: with and without a model, JSON from this site only, sizes,
-  methods) and `--ollama` / `--ollama-url`.
+  text, at most 4 calls, stopping, the warm-up, nothing left); and for the page, the answer made
+  from a reading (`answerOf`, `findOf`, `couldNotRead`) and what he is doing (`stepText`).
+  `test/librarian-server.test.js` covers the turn checked and copied, the model's settings and
+  thinking, tool calls' arguments, failures (no tools, no such model, Ollama's errors,
+  unreachable, too slow) said without the question, a turn stopped when the page stops asking, the
+  routes (`createApp`: with and without a model, JSON from this site only, sizes, methods) and
+  `--ollama` / `--ollama-url`. `test/client-librarian-model.test.js` covers `model.js` over a
+  stand-in for the server: which model (none without one, or when it cannot be reached), a turn
+  sent and its failures said, the warm-up at most every ten minutes, asking again after a while.
+  `test/client-librarian.test.js` covers a place's lines in the card, the numbered list, a place
+  taken to and `citedText`; `test/client-librarian-desk.test.js` a reading on his panel.
+
+  Step 2 checked in headless Chrome against a server of this checkout's with gemma4:12b, over the
+  demo set (2026-11-07):
+  - On a desktop the help's choice was there, off. Ticked by a click, it was kept (`reads:
+    true`), the box's hint changed and the model was warmed up. "Where and when did Edward Sapir
+    sign the preface of his book Language?" took 2.6 s: "Looking in the catalogue for
+    “Language”…", "Reading Language: An Introduction to the Study of Speech…", then "Edward Sapir
+    signed the preface in Ottawa, Ont., on April 8, 1921." with sources 1 and 2, the two lines of
+    the preface that say so. Take me there walked, and the book opened with the first of them
+    (block 11) on the right-hand page. "Hello" was answered without the model, and "What did Edward Sapir eat for breakfast?"
+    with "I found nothing that says so." after he had read the book. A question asked again at
+    once cancelled the first one's request, and the second's answer came ("The nation's capital
+    and most populous city is Berlin."); the server logged none of it.
+  - On a phone, "When was William Shakespeare born?" got "c. 23 April 1564" with two sources, the
+    article's first paragraph and its Quick facts; the keyboard went down and nothing was wider
+    than the screen.
+  - On a TV (`?tv=emulate`) the answer's first source took the focus.
+  - axe with the help open and with an answer shown: nothing on a desktop, a phone or a TV.

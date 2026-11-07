@@ -5,9 +5,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { bookIndex } from '../public/js/search.js';
-import { blockText, idOf, LibraryTools, MAX_CALLS, SYSTEM } from '../public/js/librarian/tools.js';
+import { blockText, idOf, LibraryTools, MAX_CALLS, stepText, SYSTEM } from '../public/js/librarian/tools.js';
 import { checkAnswer, norm, NOTHING, statementsOf, stem } from '../public/js/librarian/cite.js';
-import { finish, readFor, warmTurn } from '../public/js/librarian/read.js';
+import { answerOf, couldNotRead, findOf, finish, readFor, warmTurn } from '../public/js/librarian/read.js';
 
 const pg = { id: 'pg', kind: 'gutenberg', title: 'Gutenberg' };
 const wp = { id: 'wp', kind: 'wikipedia', title: 'Wikipedia' };
@@ -480,5 +480,70 @@ describe('the Librarian reading (read.js)', () => {
   it('says it found nothing when nothing is left', () => {
     const r = finish('Who?', 'Somebody wrote it [B4].', new LibraryTools(access()), { calls: [], rounds: 1, timings: { load: 0, prompt: 0, reply: 0, tokens: 0 } });
     assert.deepEqual([r.nothing, r.text, r.madeUp, r.raw], [true, NOTHING, ['B4'], 'Somebody wrote it [B4].']);
+  });
+
+  it('answers in the card with his sentences and their sources numbered; with nothing, what the catalogue has', async () => {
+    const m = model([
+      { tool_calls: [call('search_books', { query: 'Language' })] },
+      { tool_calls: [call('find', { id: 'B1', words: 'Ottawa' })] },
+      { content: 'Edward Sapir signed the preface in Ottawa on April 8, 1921 [P1]. He wrote Language [B1][P1].' },
+    ]);
+    const reading = await readFor('Where did Sapir sign his preface?', { chat: m.chat, tools: new LibraryTools(access()) });
+    const plain = { text: 'I have Language, by Edward Sapir.', finds: [{ kind: 'book', book: BOOKS.pg[0], lib: pg }], search: null };
+    const withCover = { pg: [{ ...BOOKS.pg[0], cover: 'zim/pg/covers/12629.jpg' }] };
+    const a = answerOf(reading, plain, withCover);
+    assert.equal(a.text, 'Edward Sapir signed the preface in Ottawa on April 8, 1921. He wrote Language.');
+    assert.deepEqual(a.statements, [
+      { text: 'Edward Sapir signed the preface in Ottawa on April 8, 1921.', cites: [1] },
+      { text: 'He wrote Language.', cites: [2, 1] },
+    ]);
+    assert.deepEqual(a.finds, [
+      {
+        kind: 'passage', lib: pg, bookId: '12629', at: { c: 0, b: 2 }, title: 'Language', section: 'Preface',
+        text: 'Edward Sapir. Ottawa, Ont., April 8, 1921.', author: 'Edward Sapir', cover: 'zim/pg/covers/12629.jpg',
+      },
+      { kind: 'book', book: BOOKS.pg[0], lib: pg },
+    ]);
+    assert.equal(a.reading, reading);
+    // Nothing he read says it: that, and what the catalogue has, if anything.
+    const none = finish('Who?', NOTHING, new LibraryTools(access()), { calls: [], rounds: 1, timings: { load: 0, prompt: 0, reply: 0, tokens: 0 } });
+    assert.deepEqual(answerOf(none, plain, BOOKS), { text: `${NOTHING} I have Language, by Edward Sapir.`, finds: plain.finds, search: null, reading: none });
+    assert.equal(answerOf(none, { text: 'I have nothing called “x”.', finds: [], search: null }, BOOKS).text, NOTHING);
+    // The model failed: that, and what the catalogue has.
+    assert.deepEqual(couldNotRead(plain), { ...plain, text: 'I cannot read the books just now. I have Language, by Edward Sapir.' });
+  });
+
+  it('shows an article, a hit and a section as the card takes you to them', () => {
+    const insulin = ARTICLES[1];
+    assert.deepEqual(findOf({ id: 'A1', kind: 'article', lib: wp, book: 'v1', at: { c: 3, b: 0 }, title: 'Insulin', text: 'Insulin (Wikipedia)', context: '', entry: insulin }, BOOKS),
+      { kind: 'article', article: insulin, lib: wp });
+    const hit = { title: 'Language', to: { book: '12629', c: 1, b: 2 } };
+    assert.deepEqual(findOf({ id: 'T1', kind: 'text', lib: pg, book: '12629', at: { c: 1, b: 2 }, title: 'Language', text: 'the Morse telegraph code', context: '', entry: hit }, BOOKS),
+      { kind: 'text', hit, lib: pg });
+    // A section: its book's place, no words of its own; an article's passage names no author.
+    assert.deepEqual(findOf({ id: 'S2', kind: 'section', lib: pg, book: '12629', at: { c: 0, b: 4 }, title: 'Introductory: Language Defined', in: 'Language', text: 'Introductory: Language Defined', context: '' }, BOOKS),
+      { kind: 'passage', lib: pg, bookId: '12629', at: { c: 0, b: 4 }, title: 'Language', section: 'Introductory: Language Defined', text: '', author: 'Edward Sapir', cover: null });
+    const volumes = { wp: [{ ...BOOKS.wp[0], volume: 1 }] };
+    assert.deepEqual(findOf({ id: 'P3', kind: 'passage', lib: wp, book: 'v1', at: { c: 3, b: 1 }, title: 'Insulin', in: 'Insulin', text: 'Insulin is a peptide hormone.', context: '' }, volumes),
+      { kind: 'passage', lib: wp, bookId: 'v1', at: { c: 3, b: 1 }, title: 'Insulin', section: '', text: 'Insulin is a peptide hormone.', author: '', cover: null });
+  });
+
+  it('says what he is doing as he reads', async () => {
+    const tools = new LibraryTools(access());
+    await tools.run('search_books', { query: 'Language' });
+    await tools.run('read', { id: 'B1' });
+    const section = [...tools.sources.values()].find((s) => s.kind === 'section' && s.title.includes('Introductory'));
+    const step = (name, args) => stepText({ name, args }, tools.sources);
+    assert.equal(step('search_books', { query: 'Language' }), 'Looking in the catalogue for “Language”…');
+    assert.equal(step('search_books', { query: 'Emma', author: 'Austen' }), 'Looking in the catalogue for “Emma” by Austen…');
+    assert.equal(step('search_books', { author: 'Austen' }), 'Looking in the catalogue for books by Austen…');
+    assert.equal(step('search_articles', { query: 'Insulin' }), 'Looking for an article on “Insulin”…');
+    assert.equal(step('search_text', { query: 'telegraph' }), 'Looking through the books’ text for “telegraph”…');
+    assert.equal(step('read', { id: 'b1' }), 'Reading Language…');
+    assert.equal(step('read', { id: 'B1', page: 2 }), 'Reading Language, page 2…');
+    assert.equal(step('read', { id: section?.id }), `Reading Language: ${section?.title}…`);
+    assert.equal(step('find', { id: 'B1', words: 'Ottawa' }), 'Looking for “Ottawa” in Language…');
+    assert.equal(step('read', { id: 'B9' }), 'Reading what he found…');
+    assert.equal(step('delete_everything', {}), 'Looking…');
   });
 });

@@ -29,10 +29,19 @@ on his own panel (point at him and pull the trigger). *Take me there* and he lea
 found, round what stands in the room, and it comes out as you get there; a click, a tap, Enter or
 the trigger is there at once, and with less motion (the help's Comfort) it is a cut. He can say
 his answers aloud, in your device's own voice, once you choose it (the help's *The librarian
-speaks his answers*, or *Voice* on his panel). The librarian will always be optional (the help's
-*Show the librarian* turns it off): the library works as it does without it, the page reports
-nothing about its visitors, and a question goes to a hosted model only when you ask one, having
-chosen to.
+speaks his answers*, or *Voice* on his panel).
+
+The second is built for a server of your own, with a model of [Ollama](https://ollama.com/)'s on
+the same machine (`--ollama gemma4:12b`, below). Choose *The librarian reads the books to answer
+questions* in the help, and he searches and reads the books for your question while you see what
+he is doing, then answers in a sentence or three. Each sentence carries the numbers of what it
+comes from, listed under it, and *Take me there* on a passage opens its book at that paragraph. A
+sentence its sources do not say is struck before you see it; with nothing left he says "I found
+nothing that says so." The website has no model, so there he answers as in the first.
+
+The librarian will always be optional (the help's *Show the librarian* turns it off): the library
+works as it does without it, the page reports nothing about its visitors, and a question goes to a
+model only when you ask one, having chosen to.
 
 librarian is a fork of [vrlbry](https://github.com/AriaMoKr/vrlbry), a virtual library for your ZIM
 files, and does all that vrlbry does. It finds the `.zim` files in a folder and shelves their
@@ -90,6 +99,18 @@ start it with HTTPS as well (HTTP stays on 8080, HTTPS is added on 8443):
 npm run start:https
 ```
 
+For the librarian's answers with citations, install [Ollama](https://ollama.com/), get a model
+that can call tools, and name it when you start the server; then choose *The librarian reads the
+books to answer questions* in the help (**?**):
+
+```bash
+ollama pull gemma4:12b
+```
+
+```bash
+node server/index.js --ollama gemma4:12b
+```
+
 Other options:
 
 ```bash
@@ -108,6 +129,8 @@ node server/index.js --dir /path/to/zims --port 8080
 | `--max-generic <n>` | max books listed from other (non-Gutenberg, non-Wikisource) ZIMs (default 2000) |
 | `--no-watch` | don't pick up `.zim` files added or removed while the server runs |
 | `--kiwix-serve <url>` | full-text search through Kiwix's own server ([kiwix-serve](https://github.com/kiwix/kiwix-tools)) at `<url>`, for the libraries whose ZIM it serves too (the same file); the search then lists hits "In the text" ([docs/SEARCH.md](docs/SEARCH.md)) |
+| `--ollama <model>` | the librarian reads the books and answers with this model of [Ollama](https://ollama.com/)'s, on the same machine (gemma4:12b, or another that can call tools); the help then offers *The librarian reads the books to answer questions* ([docs/LIBRARIAN.md](docs/LIBRARIAN.md), experiment 2). Neither the questions nor the answers are logged |
+| `--ollama-url <url>` | with `--ollama`: Ollama at another address (default `http://127.0.0.1:11434`) |
 | `--quiet` | print only problems and the address |
 
 ## Adding books
