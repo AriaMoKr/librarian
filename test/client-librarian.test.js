@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { bookIndex } from '../public/js/search.js';
-import { ask, citedText, findLines, MAX_FINDS, parseQuestion, PROMPT, searchesFor } from '../public/js/librarian/ask.js';
+import { ask, citedText, findLines, MAX_FINDS, parseQuestion, PROMPT, PROMPT_READING, searchesFor } from '../public/js/librarian/ask.js';
 import { findList } from '../public/js/librarian/card.js';
 import { fakeDocument, inner, markup } from './helpers/fake-dom.js';
 import './helpers/vendor.js'; // librarian.js → desk.js → the page's ../../vendor/common/panel.js
@@ -206,6 +206,9 @@ describe('librarian: answers', () => {
     assert.equal((await ask('zzz', library({ libraries: [], index: () => [] }))).text, 'There are no books here yet.');
     assert.equal((await ask('Hello', library())).text, `Hello. ${PROMPT}`);
     assert.equal((await ask('', library())).text, PROMPT);
+    // While he reads the books for his answers, a question too.
+    assert.equal((await ask('Hello', library({ prompt: PROMPT_READING }))).text, `Hello. ${PROMPT_READING}`);
+    assert.equal(PROMPT_READING, 'Ask me a question, or for a title, an author or a subject.');
   });
 
   it('goes on without the articles when their search fails or stalls', async () => {

@@ -14,7 +14,8 @@ import './helpers/vendor.js'; // desk.js's ../../vendor/common/panel.js
 globalThis.document ??= /** @type {any} */ ({
   createElement: () => ({ width: 0, height: 0, style: {}, getContext: () => new Proxy({}, { get: () => () => ({ width: 0 }) }) }),
 });
-const { bookOf, Desk } = await import('../public/js/librarian/desk.js');
+const { answerLines, bookOf, Desk } = await import('../public/js/librarian/desk.js');
+const { PROMPT, PROMPT_READING } = await import('../public/js/librarian/ask.js');
 const { Figure, FIGURE, figureGeometry, rayUpright } = await import('../public/js/librarian/figure.js');
 const { VIGNETTE } = await import('../public/vendor/common/access.js');
 
@@ -85,10 +86,16 @@ function room({ presenting = false, hall = false, furniture = [], speech = undef
   eyesAt(spawn.x, spawn.z);
   const asked = [];
   const card = {
-    input: { value: '' }, answer: null, onLooking: null, onAnswer: null,
+    input: { value: '', placeholder: 'A title, an author or a subject' }, answer: null, onLooking: null, onAnswer: null, onStep: null,
+    step: '', reading: false, stopped: 0,
     askNow(q) { asked.push(q); },
+    stopReading() {
+      if (!this.reading) return;
+      this.stopped++;
+      this.reading = false;
+    },
   };
-  const calls = { box: 0, taken: [] };
+  const calls = { box: 0, taken: [], opened: 0 };
   const desk = new Desk({
     interaction: ia, card, multi: () => false, intoBox: () => { calls.box++; },
     take: (find) => {
@@ -97,6 +104,7 @@ function room({ presenting = false, hall = false, furniture = [], speech = undef
     },
     onWalk: (on) => log.push(['walk', on]),
     speech,
+    onOpen: () => { calls.opened++; },
   });
   const frame = (dt = 1 / 72, n = 1) => {
     for (let i = 0; i < n; i++) for (const fn of frames) fn(dt);
@@ -233,6 +241,7 @@ describe('the librarian: at the desk', () => {
     desk.open();
     const p = desk.panel;
     assert.equal(p.get('q').text, 'emma|');
+    assert.equal(calls.opened, 1, 'opened: a question may come (his reading\'s model warmed up)');
     const key = (label) => p.elements.find((e) => e.type === 'button' && e.label === label);
     const press = (el) => p.click((el.x + el.w / 2) / p.w, 1 - (el.y + el.h / 2) / p.h);
     press(key('X'));
@@ -244,6 +253,16 @@ describe('the librarian: at the desk', () => {
     press(key('Clear'));
     assert.equal(desk.q, '');
     assert.equal(p.get('q').text, '| A title, an author or a subject');
+    assert.equal(p.get('answer').text, PROMPT, 'what to ask him, before a question');
+    // The card's hint and his prompt, a question too while he reads (librarian.js refreshes the panel).
+    card.input.placeholder = 'A question, a title, an author or a subject';
+    card.prompt = PROMPT_READING;
+    desk.refresh();
+    assert.equal(p.get('q').text, '| A question, a title, an author or a subject');
+    assert.equal(p.get('answer').text, PROMPT_READING);
+    card.input.placeholder = 'A title, an author or a subject';
+    card.prompt = PROMPT;
+    desk.refresh();
     assert.equal(p.get('ask').active, false);
     press(key('Ask'));
     assert.deepEqual(asked, [], 'nothing to ask');
@@ -295,6 +314,81 @@ describe('the librarian: at the desk', () => {
     assert.deepEqual(p.get('finds').items.map((i) => [i.label, i.sub]), [['1. Emma', 'Chapter I · Jane Austen'], ['2. Emma', 'Jane Austen']]);
     card.onStep('Reading Emma…');
     assert.equal(p.get('answer').text, 'Emma was handsome, clever, and rich. [1] Jane Austen wrote it. [2]', 'a step only while looking');
+    assert.equal(p.get('step'), undefined, 'nor under his answer');
+  });
+
+  it('shows a first answer while he reads on, what he is doing under it, then his reading\'s in its place', async () => {
+    const said = [];
+    const speech = { available: () => true, on: () => true, set: () => {}, say: (t) => said.push(t), stop: () => said.push('(stop)') };
+    const { desk, card, calls } = room({ presenting: true, speech });
+    desk.open();
+    const p = desk.panel;
+    card.onLooking();
+    card.step = 'Reading for an answer…';
+    card.onStep(card.step);
+    assert.equal(p.get('answer').text, 'Reading for an answer…', 'until the first answer, in its place');
+    const emma = { kind: 'book', book: { id: '3', title: 'Emma', author: 'Jane Austen' }, lib: { id: 'pg', title: 'Gutenberg' } };
+    card.answer = { text: 'I have Emma, by Jane Austen.', finds: [emma], search: null };
+    card.reading = true;
+    card.onAnswer(card.answer);
+    assert.equal(p.get('answer').text, 'I have Emma, by Jane Austen.');
+    assert.equal(p.get('step').text, 'Reading for an answer…', 'under it');
+    assert.ok(p.get('step').y > p.get('answer').y && p.get('finds').y > p.get('step').y, 'the answer, what he is doing, its finds');
+    assert.deepEqual(p.get('finds').items.map((i) => i.label), ['Emma']);
+    assert.deepEqual(said, ['(stop)'], 'a first answer is not said (the new question stopped the last)');
+    card.step = 'Reading Emma…';
+    card.onStep(card.step);
+    assert.equal(p.get('step').text, 'Reading Emma…');
+    assert.equal(p.get('answer').text, 'I have Emma, by Jane Austen.');
+    p.dirty = false;
+    card.onStep(card.step);
+    assert.equal(p.dirty, false, 'redrawn only when it changes');
+    // His reading's answer replaces it, and is said, without its numbers.
+    const read = { kind: 'passage', lib: { id: 'pg', title: 'Gutenberg' }, bookId: '3', at: { c: 0, b: 2 }, title: 'Emma', section: 'Chapter I', text: 'Emma Woodhouse, handsome, clever, and rich.', author: 'Jane Austen', cover: null };
+    card.reading = false;
+    card.step = '';
+    card.onStep('');
+    card.answer = { text: 'Emma was handsome, clever, and rich.', finds: [read], search: null, statements: [{ text: 'Emma was handsome, clever, and rich.', cites: [1] }] };
+    card.onAnswer(card.answer);
+    assert.equal(p.get('answer').text, 'Emma was handsome, clever, and rich. [1]');
+    assert.equal(p.get('step'), undefined);
+    assert.deepEqual(p.get('finds').items.map((i) => i.label), ['1. Emma']);
+    assert.deepEqual(said, ['(stop)', 'Emma was handsome, clever, and rich.']);
+    // A first answer's find taken from the panel: he stops reading, and takes you there.
+    card.reading = true;
+    card.answer = { text: 'I have Emma, by Jane Austen.', finds: [emma], search: null };
+    card.onAnswer(card.answer);
+    p.get('finds').items[0].onClick();
+    await flush();
+    assert.equal(card.stopped, 1);
+    assert.deepEqual(calls.taken, [emma]);
+  });
+
+  it('gives a reading\'s answer the lines it takes on his panel, up to 7, and another 3 at most', () => {
+    const { desk, card } = room({ presenting: true });
+    desk.open();
+    const p = desk.panel;
+    // A measurer: 14 px a letter (the panel's answer is 828 px wide: 59 letters a line).
+    p.ctx = /** @type {any} */ ({ font: '', measureText: (t) => ({ width: t.length * 14 }) });
+    const sentence = 'Emma Woodhouse was handsome, clever and rich, with a comfortable home.';
+    const statements = [1, 2, 3].map((n) => ({ text: sentence, cites: [n] }));
+    const finds = [1, 2, 3].map((n) => ({ kind: 'book', book: { id: String(n), title: `Emma ${n}`, author: 'Jane Austen' }, lib: { id: 'pg', title: 'Gutenberg' } }));
+    card.answer = { text: statements.map((s) => s.text).join(' '), finds, search: null, statements };
+    card.onAnswer(card.answer);
+    const a = p.get('answer');
+    assert.ok(a.maxLines > 3 && a.maxLines <= 7, `all of it: ${a.maxLines} lines`);
+    assert.equal(a.h, a.maxLines * 35);
+    const list = p.get('finds');
+    assert.ok(list.y >= a.y + a.h, 'the sources under it');
+    assert.ok(Math.floor(list.h / list.rowH) >= 3, 'three sources shown');
+    assert.ok(list.y + list.h <= p.h, 'within the panel');
+    card.answer = { text: Array(5).fill(sentence).join(' '), finds, search: null };
+    card.onAnswer(card.answer);
+    assert.equal(p.get('answer').maxLines, 3, 'not a reading: 3 lines, the last cut');
+    const words = 'one two three four five six seven eight nine ten '.repeat(20);
+    assert.equal(answerLines(p.ctx, words, 828, 7), 7);
+    assert.equal(answerLines(p.ctx, 'Emma', 828, 7), 1);
+    assert.equal(answerLines(p.ctx, '', 828, 7), 1);
   });
 
   it('says his answers once chosen, stops at a new question or hidden, and his panel\'s Voice button chooses it', () => {

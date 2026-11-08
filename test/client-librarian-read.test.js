@@ -267,6 +267,19 @@ describe('the citation rule (cite.js)', () => {
     assert.deepEqual(statementsOf('<think>I should cite it.</think> He signed it in Ottawa, Ont., on April 8, 1921 [P2].'), [
       { text: 'He signed it in Ottawa, Ont., on April 8, 1921.', ids: ['P2'] },
     ]);
+    // A full stop after the citation, where the sentence ends with one already: one, and it ends there.
+    assert.deepEqual(statementsOf('Edward Sapir signed his preface in Ottawa, Ont. [P3].'), [
+      { text: 'Edward Sapir signed his preface in Ottawa, Ont.', ids: ['P3'] },
+    ]);
+    assert.deepEqual(statementsOf('He lists maps, charts, etc. [P3]. It said “yes.” [P4]. The atlas has 40 [P5].'), [
+      { text: 'He lists maps, charts, etc.', ids: ['P3'] },
+      { text: 'It said “yes.”', ids: ['P4'] },
+      { text: 'The atlas has 40.', ids: ['P5'] },
+    ]);
+    assert.deepEqual(statementsOf('He wrote it in 1921... [P1]. Then Ottawa [P2].'), [
+      { text: 'He wrote it in 1921...', ids: ['P1'] },
+      { text: 'Then Ottawa.', ids: ['P2'] },
+    ]);
     // Several citations in a row are one; a comma after one is the sentence's own.
     assert.deepEqual(statementsOf('It is in the article [P2], [P5], and [P7]. He wrote it [B1], and he signed it [P1].'), [
       { text: 'It is in the article.', ids: ['P2', 'P5', 'P7'] },
@@ -342,7 +355,7 @@ describe('the citation rule (cite.js)', () => {
     assert.equal(check('Sapir calls language “a purely human” method [P2].').kept.length, 1);
     // What is cited, with a book's own title round it.
     assert.equal(check('Sapir wrote “Language: An Introduction to the Study of Speech” [P2].').kept.length, 1);
-    assert.deepEqual(check('Sapir signed it “Ottawa, Ont.” [B1].').kept, [{ text: 'Sapir signed it “Ottawa, Ont.”.', ids: ['B1', 'P1'] }]);
+    assert.deepEqual(check('Sapir signed it “Ottawa, Ont.” [B1].').kept, [{ text: 'Sapir signed it “Ottawa, Ont.”', ids: ['B1', 'P1'] }]);
     assert.deepEqual(check('He wrote “An Introduction to the Study of Speech” [P1].').kept, [{ text: 'He wrote “An Introduction to the Study of Speech”.', ids: ['P1'] }]);
     assert.deepEqual(why('Sapir wrote that “language is a game” [P2].'), ['quotes words that no source has']);
   });

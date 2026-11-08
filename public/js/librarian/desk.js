@@ -15,6 +15,10 @@
 //   while) he walks back to the desk.
 // - When the visitor has chosen it (the help dialog, or his panel's Voice button), he says each
 //   answer aloud (voice.js, through librarian.js); a new question, or hiding him, stops it.
+// - His reading (experiment 2, step 3): the panel shows what he is doing, under the first answer
+//   while he reads on, then his reading's sentences with their sources' numbers, all of them, and
+//   the sources as its list; his voice says only the answer he ends with, without the numbers.
+//   The panel is redrawn only when something on it changes (Panel.set), never per frame.
 //
 // The figure is one draw call, the panel one more while it is open, the way on the floor one more
 // while walking; nothing done every frame makes an object. A walk's planning is a grid over the
@@ -22,7 +26,7 @@
 
 import * as THREE from 'three';
 import { VIGNETTE } from '../../vendor/common/access.js';
-import { Panel, UI } from '../../vendor/common/panel.js';
+import { Panel, UI, wrapText } from '../../vendor/common/panel.js';
 import { perf } from '../perf.js';
 import { citedText, findLines, PROMPT } from './ask.js';
 import { Figure, FIGURE, rayUpright } from './figure.js';
@@ -78,6 +82,25 @@ const STRIDE = 0.7;
 /** Back to the desk once the viewer is this far from him (m), or after this long (s) of browsing. */
 const BACK_AWAY = 3.5;
 const BACK_AFTER = 20;
+/** His panel's answer: its letters' size (px) and a line's height, as Panel draws text. */
+const ANSWER_SIZE = 28;
+const ANSWER_LINE = ANSWER_SIZE * 1.25;
+/** Its lines at most: a reading's sentences all (three short ones), another answer, what he is doing. */
+const READ_LINES = 7;
+const ANSWER_LINES = 3;
+const STEP_LINES = 2;
+
+/**
+ * The lines his panel's answer takes, as Panel wraps it at its size, from 1 to `max`.
+ * @param {CanvasRenderingContext2D} g the panel's
+ * @param {string} text
+ * @param {number} width
+ * @param {number} max
+ */
+export function answerLines(g, text, width, max) {
+  g.font = `${ANSWER_SIZE}px ${UI.font}`;
+  return Math.max(1, Math.min(max, wrapText(g, text, width).length));
+}
 
 const _eye = new THREE.Vector3();
 const _feet = new THREE.Vector3();
@@ -122,8 +145,10 @@ export class Desk {
    * @param {(on: boolean) => void} [o.onWalk] true as he starts to lead the way, false once the
    *   book is out (or the walk ended without it): the page's card fades meanwhile (librarian.js)
    * @param {Speech} [o.speech] his voice, as the visitor chose it
+   * @param {() => void} [o.onOpen] his panel opened: a question may come (librarian.js warms up
+   *   his reading's model, as when the card's box takes the focus)
    */
-  constructor({ interaction, card, take, multi, intoBox, onWalk, speech }) {
+  constructor({ interaction, card, take, multi, intoBox, onWalk, speech, onOpen }) {
     this.interaction = interaction;
     this.card = card;
     this.take = take;
@@ -131,6 +156,7 @@ export class Desk {
     this.intoBox = intoBox;
     this.onWalk = onWalk;
     this.speech = speech;
+    this.onOpen = onOpen;
     this.shown = true;
     this.figure = new Figure();
     interaction.scene.add(this.figure.mesh);
@@ -196,13 +222,17 @@ export class Desk {
     };
     card.onAnswer = (answer) => {
       this._looking = false;
-      if (answer && this.shown && this.speech?.on()) this.speech.say(answer.text);
+      // Said as his answer: a first one, shown while he reads on (card.reading), is not.
+      if (answer && !this.card.reading && this.shown && this.speech?.on()) this.speech.say(answer.text);
       else if (!answer) this.speech?.stop();
       this._refill();
     };
-    // What he is doing while he reads (experiment 2), on his panel as in the card.
+    // What he is doing while he reads (experiment 2), on his panel as in the card: in the answer's
+    // place until the first answer comes, then under it. Redrawn only when it changes.
     card.onStep = (step) => {
-      if (this._looking && this.panel.visible) this.panel.set('answer', { text: step || 'Looking…' });
+      if (!this.panel.visible) return;
+      if (this._looking) this.panel.set('answer', { text: step || 'Looking…' });
+      else this.panel.set('step', { text: step });
     };
     this._place();
   }
@@ -244,6 +274,7 @@ export class Desk {
     this._placePanel();
     this._fill();
     this.panel.visible = true;
+    this.onOpen?.();
   }
 
   close() {
@@ -635,9 +666,9 @@ export class Desk {
     this.card.askNow(this.q);
   }
 
-  /** The question field's text and colour: what is typed and the caret, or what to type. */
+  /** The question field's text and colour: what is typed and the caret, or what to type (the card's hint: a question too while he reads). */
   _questionLine() {
-    return this.q ? { text: `${this.q}|`, color: UI.text } : { text: '| A title, an author or a subject', color: UI.muted };
+    return this.q ? { text: `${this.q}|`, color: UI.text } : { text: `| ${this.card.input.placeholder}`, color: UI.muted };
   }
 
   _fill() {
@@ -675,12 +706,19 @@ export class Desk {
     p.add({ type: 'button', x: pad + 6 * (kw + gap), y, w: 2 * (kw + gap) - gap, h: kh, label: 'Clear', size: 24, onClick: () => this.type(null) });
     p.add({ id: 'ask', type: 'button', x: pad + 8 * (kw + gap), y, w: 2 * (kw + gap) - gap, h: kh, label: 'Ask', size: 26, active: !!this.q.trim(), onClick: () => this.askNow() });
     y += kh + 22;
-    const answer = this.card.answer;
-    // A reading's sentences with their sources' numbers, which number the list (ask.js citedText).
-    const said = this._looking ? this.card.step || 'Looking…' : answer ? citedText(answer) : PROMPT;
-    p.add({ id: 'answer', type: 'text', x: pad, y, w: W - 2 * pad, h: 104, text: said, size: 28, maxLines: 3, color: !this._looking && answer ? UI.text : UI.muted });
-    y += 112;
-    const finds = !this._looking && answer ? answer.finds : [];
+    const answer = this._looking ? null : this.card.answer;
+    // What he is doing until an answer comes; a reading's sentences, all of them, with their
+    // sources' numbers, which number the list (ask.js citedText); another answer in 3 lines at most.
+    const said = this._looking ? this.card.step || 'Looking…' : answer ? citedText(answer) : this.card.prompt ?? PROMPT;
+    const lines = answerLines(p.ctx, said, W - 2 * pad, answer?.statements ? READ_LINES : answer ? ANSWER_LINES : STEP_LINES);
+    p.add({ id: 'answer', type: 'text', x: pad, y, w: W - 2 * pad, h: lines * ANSWER_LINE, text: said, size: ANSWER_SIZE, maxLines: lines, color: answer ? UI.text : UI.muted });
+    y += lines * ANSWER_LINE + 8;
+    // A first answer while he reads on: what he is doing, under it (onStep keeps it current).
+    if (answer && this.card.reading) {
+      p.add({ id: 'step', type: 'text', x: pad, y, w: W - 2 * pad, h: 30, text: this.card.step ?? '', size: 24, maxLines: 1, color: UI.muted });
+      y += 38;
+    }
+    const finds = answer ? answer.finds : [];
     if (!finds.length) return;
     const multi = this.multi();
     const numbered = !!answer?.statements;
@@ -692,6 +730,7 @@ export class Desk {
           label: numbered ? `${i + 1}. ${title}` : title, sub: line, right: 'Take me there',
           onClick: () => {
             this.close();
+            this.card.stopReading?.(); // a first answer's find: he has done his part
             this.takeThere(find);
           },
         };

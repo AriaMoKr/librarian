@@ -122,6 +122,9 @@ export const idOf = (v) => String(v ?? '').toUpperCase().replace(/[\s[\]()"'`]/g
 /** A tool's argument as text. @param {any} args @param {string} name */
 const arg = (args, name) => String(args?.[name] ?? '').replace(/\s+/g, ' ').trim();
 
+/** What he is doing until the model's first call: reading on, under the library's own answer (card.js). */
+export const FIRST_STEP = 'Reading for an answer…';
+
 /**
  * What he is doing, as the card shows it while he reads (read.js onStep): the search's words, or
  * the title of what he reads (by its id, as the model gave it).

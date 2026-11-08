@@ -116,20 +116,28 @@ export function statementsOf(answer) {
   let plain = '';
   /** @type {Array<{ at: number, ids: string[] }>} */
   const marks = [];
+  /** Where a sentence surely ends: its own full stop after its citation (below). */
+  const ends = [];
   let last = 0;
   for (const m of s.matchAll(MARK)) {
     plain += s.slice(last, m.index);
     marks.push({ at: plain.length, ids: idsIn(m[0]) });
     last = (m.index ?? 0) + m[0].length;
+    // "… in Ottawa, Ont. [P3]." : the sentence's own full stop, after its citation, where its words
+    // end with one already (an abbreviation's, a quotation's): one full stop, and the sentence ends.
+    if (s[last] === '.' && s[last + 1] !== '.' && /[.!?…]["”’')\]]*$/.test(plain)) {
+      last++;
+      ends.push(plain.length);
+    }
   }
   plain += s.slice(last);
   // Sentence ends: . ! ? (and the quotes or brackets closing on them) before a capital, a digit or
   // an opening quote, and the end.
-  const ends = [];
   for (const m of plain.matchAll(/[.!?…]+["”’')\]]*(?=\s+["“‘(]?[\p{Lu}\d])/gu)) {
     if (endsSentence(plain, m.index ?? 0)) ends.push((m.index ?? 0) + m[0].length);
   }
   ends.push(plain.length);
+  ends.sort((a, b) => a - b);
   /** @type {Statement[]} */
   const out = [];
   let start = 0;

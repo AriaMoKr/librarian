@@ -15,6 +15,8 @@ export const ANSWER_WAIT = 10000;
 
 /** What the librarian says to a question with nothing in it, or only a greeting. */
 export const PROMPT = 'Ask me for a title, an author or a subject.';
+/** The same while he reads the books for his answers (experiment 2): a question too. */
+export const PROMPT_READING = 'Ask me a question, or for a title, an author or a subject.';
 
 /** Words that open a question, taken off its front one after another ("Hello, do you have …"). */
 const OPENERS = [
@@ -331,6 +333,7 @@ export function chooseFinds(search, books, articles, texts) {
  * @property {(q: string) => Promise<Array<{ hit: any, lib: any }>>} findInText places in the
  *   books' text (search.js findInText; only through the server's kiwix-serve)
  * @property {number} [wait] ms to wait for those two (ANSWER_WAIT)
+ * @property {string} [prompt] what he says to ask him: PROMPT, or PROMPT_READING while he reads
  */
 
 /**
@@ -444,7 +447,8 @@ export function answerText(found, libraries) {
  */
 export async function ask(text, library) {
   const question = parseQuestion(text);
-  if (question.empty) return { text: question.greeting ? `Hello. ${PROMPT}` : PROMPT, finds: [], search: null };
+  const prompt = library.prompt ?? PROMPT;
+  if (question.empty) return { text: question.greeting ? `Hello. ${prompt}` : prompt, finds: [], search: null };
   /** @type {Found | null} */
   let first = null;
   for (const search of searchesFor(question, library.index())) {
@@ -452,7 +456,7 @@ export async function ask(text, library) {
     first ??= found;
     if (found.finds.length) return { text: answerText(found, library.libraries), finds: found.finds, search };
   }
-  return { text: first ? answerText(first, library.libraries) : PROMPT, finds: [], search: first?.search ?? null };
+  return { text: first ? answerText(first, library.libraries) : prompt, finds: [], search: first?.search ?? null };
 }
 
 /**

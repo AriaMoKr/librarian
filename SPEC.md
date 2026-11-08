@@ -2364,8 +2364,10 @@ call (`startLibrarian({ overlay, interaction, tv })`), the overlay gives them tw
 Built so far: experiment 1, all four steps (2026-11-07), with no model: the words in the card, the
 figure beside the stand with his panel in VR, his walk to the book, and his voice. Experiment 2's
 step 1 (2026-11-07): his reading with a model of Ollama's, its citation rule and the server's route
-to Ollama, measured over 24 questions; and its step 2 (2026-11-07): his reading in the card, where
-the server has a model and it is chosen (Answers with citations, below).
+to Ollama, measured over 24 questions; its step 2 (2026-11-07): his reading in the card, where the
+server has a model and it is chosen; and its step 3 (2026-11-07): the library's own answer first
+while he reads on, his reading on his panel in VR, and his voice saying the answer he ends with
+(Answers with citations, below).
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
   the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks, reads }` (kept whole)
@@ -2483,16 +2485,19 @@ the server has a model and it is chosen (Answers with citations, below).
   - Placed as it opens: 0.95 m from the eyes and 0.45 rad off the line to him, on the side away
     from the stand (so he stands beside it), its centre at 1.47 m, facing the eyes and leaning
     back as the stand's does.
-  - "Ask the librarian", Voice (His voice, below) and ✕; the question with a caret, or "A title,
-    an author or a subject";
+  - "Ask the librarian", Voice (His voice, below) and ✕; the question with a caret, or the card's
+    hint after a caret ("A title, an author or a subject"; with his reading chosen, "A question, a
+    title, an author or a subject");
     the stand's keyboard (the Search tab's four rows, then Space, ⌫, Clear and Ask), one space at
     a time, at most 80 characters, Ask lit once there is a question.
   - Ask goes through the card: the question is put in the card's box and asked there
-    (`card.askNow`), and the panel follows the card (`onLooking`: "Looking…"; `onAnswer`: the
-    answer), so the two always say the same. Opening the panel takes the card's question and
-    answer.
-  - The answer (up to 3 lines), then the finds as a list: title, line, "Take me there", which
-    closes the panel, and he leads the way there (`Desk.takeThere`).
+    (`card.askNow`), and the panel follows the card (`onLooking`: "Looking…"; `onStep`: what he is
+    doing while he reads; `onAnswer`: the answer), so the two always say the same. Opening the
+    panel takes the card's question and answer, and warms up his reading's model (`onOpen`), as
+    the box's focus does.
+  - The answer (up to 3 lines; a reading's, up to 7: `answerLines` measures it as the panel wraps
+    it), then the finds as a list: title, line, "Take me there", which closes the panel, and he
+    leads the way there (`Desk.takeThere`).
   - It closes with ✕, choosing him again, on leaving VR, on a rebuild and when he is hidden. It
     is drawn again only when its words change (the panel's `dirty`): 1 draw call while open, per
     eye.
@@ -2557,7 +2562,9 @@ the server has a model and it is chosen (Answers with citations, below).
     its own)", and the panel's button reads "No voice", disabled.
   - **What he says:** the answer as the card shows it, a library's "·" read as a pause and its
     class code ("(P)") left out (`spoken`), at rate 0.95. Choosing it says "I will say my answers
-    aloud.", so it is heard at once.
+    aloud.", so it is heard at once. While he reads (Answers with citations, below) only the answer
+    he ends with is said, its sentences without their sources' numbers: the first answer, shown
+    meanwhile (`card.reading`), is not.
   - **Stopped:** by a new question (the card's `onLooking`), the answer taken away, him hidden,
     unticking it, and leaving the page (`pagehide`). Each answer stops the last.
   - It sends nothing anywhere, and costs no draw call; the panel is drawn again only as the
@@ -2674,8 +2681,9 @@ the server has a model and it is chosen (Answers with citations, below).
 
 A language model reads the library for an answer, and the answer keeps only what a source it read
 says (docs/LIBRARIAN.md). Step 1 (2026-11-07) is the reading, its tools, the citation rule and
-the server's route to the model; step 2 (2026-11-07) puts them in the card (On the page, below).
-Step 3 is VR and the voice.
+the server's route to the model; step 2 (2026-11-07) puts them in the card, and step 3
+(2026-11-07) on his panel in VR and in his voice, with the library's own answer first (On the
+page, below).
 
 - **The model** is one of Ollama's on the server's machine (`--ollama <model>`, §3.7), through
   `POST /api/librarian/chat` (§4): the page holds the conversation and runs the tools, the server
@@ -2723,7 +2731,9 @@ Step 3 is VR and the voice.
   warm-up's turn: the instructions and the tools.
 - **The citation rule** (`cite.js`, `checkAnswer`, pure). The answer is taken apart into
   sentences (`statementsOf`: not after an abbreviation or an initial; thinking left in and copied
-  references "[1]" taken out), each with the ids in it or right after it, written `[P3]`,
+  references "[1]" taken out; a full stop after a citation, where the words before it end with
+  one already, "Ottawa, Ont. [P3].", ends the sentence and is not doubled), each with the ids in
+  it or right after it, written `[P3]`,
   `[P3, P4]`, `(P3)`, `【P3】`, or several in a row (`[B1][P2]`, `[P2], [P5], and [P7]`). A
   sentence saying nothing was found ("I found nothing that says
   so", "could not find", "does not say") counts as that, cited or not. A sentence is struck, and
@@ -2744,22 +2754,33 @@ Step 3 is VR and the voice.
      its sources do not make");
   7. of its other words of 4 letters or more (not about the sources: "book", "says", "wrote"),
      when there are 2 or more, fewer than half are there ("says more than its sources").
-- **On the page** (step 2: `model.js`, `librarian.js`, `card.js`, `desk.js`):
+- **On the page** (steps 2 and 3: `model.js`, `librarian.js`, `card.js`, `desk.js`):
   - The help's choice "The librarian reads the books to answer questions, and says where he read
     it (with gemma4:12b, on this site’s server)", after the voice's, is shown only where the server
     has a model (`ServerModel.info`, `GET /api/librarian`; the static site's page never asks:
     `interaction.staticSite`). It is off at first and kept as `reads`. While the model cannot
     answer it is disabled and says why ("gemma4:12b cannot answer just now: …"), and the server
     is asked again as the box takes the focus, at most every 10 s (`mayAskAgain`). Chosen, the
-    box's hint asks for a question too: "A question, a title, an author or a subject".
-  - The warm-up (`ServerModel.warm` with `warmTurn`) goes as reading is chosen and as the box
-    takes the focus, at most every 10 minutes (`WARM_EVERY`); after a failed one, the next focus
-    tries again.
+    box's hint asks for a question too: "A question, a title, an author or a subject", and so does
+    he, to a greeting and on his panel before a question (`card.prompt`, `PROMPT_READING`: "Ask me
+    a question, or for a title, an author or a subject.").
+  - The warm-up (`ServerModel.warm` with `warmTurn`) goes as reading is chosen, as the box takes
+    the focus and as his panel opens in VR, at most every 10 minutes (`WARM_EVERY`); after a
+    failed one, the next tries again.
   - A question is answered as in experiment 1 (`ask`) and, at the same time, read for: `readFor`
     over `LibraryTools`, whose `Access` is the page's own searches and reading (search.js,
     api.js), with the server's model (`ServerModel.chat`). A question in which experiment 1 finds
-    nothing to look for (a greeting: `parseQuestion`) is its alone, with no model. The answer
-    (`answerOf`):
+    nothing to look for (a greeting: `parseQuestion`) is its alone, with no model.
+  - **The first answer** is experiment 1's, shown as soon as it comes when it found something
+    (`onFirst`; the card's `reading` is then true), its finds ready to take. Under it a line shows
+    what he is doing, "Reading for an answer…" (`FIRST_STEP`) until the model's first call, and a
+    screen reader hears the answer followed by "I am reading for an answer." (an `.ov-sr` span in
+    the status). Taking one of its finds stops the reading (`stopReading`: its request cancelled,
+    the line and the span gone), and the first answer stays as the answer. One that found nothing
+    ("I have nothing called “Where and when did …”", as a question asked as a question often gets)
+    is not shown, since his answer would contradict it: "Looking…" shows instead (said once, after
+    400 ms), with what he is doing on the line under it.
+  - **His reading's answer** then replaces it, said once in the status (`answerOf`):
     - the sentences kept, each followed by the numbers of its sources (`sup.lb-cite`, seen, not
       said: the list under the answer is numbered and named "Where the librarian read it"). The
       finds are the sources in the order first cited (`findOf`): a book, an article, a hit, or a
@@ -2771,13 +2792,25 @@ Step 3 is VR and the voice.
       finds when it has any;
     - when the model cannot be reached or fails, "I cannot read the books just now." followed by
       experiment 1's answer and finds (`couldNotRead`).
-  - Meanwhile what he is doing shows under the box (`stepText`: "Looking in the catalogue for
-    “Language”…", "Reading Language: An Introduction to the Study of Speech…"), seen, not said
-    (`aria-hidden`; the status says "Looking…" once), and on his panel in VR. A newer question, or
-    the answer taken away, stops the reading: its request is cancelled, and the server stops the
-    model's turn (§4).
-  - In VR his panel shows the answer with its numbers in brackets (`citedText`) and its sources
-    numbered; his voice says the sentences without the numbers.
+  - The list: when his reading's finds are the first answer's (nothing found, or the model
+    failed) the list stays as it is; otherwise the new one replaces it, and a find that had the
+    focus gives it to the same find in the new list, else to the new list's first (on a TV the
+    first answer's first find takes the focus from the question, so the reading's first source
+    has it next). On a touch screen the box lets go of the focus at the first answer, so the
+    keyboard goes down.
+  - Meanwhile what he is doing shows on the line under the first answer (`stepText`: "Looking in
+    the catalogue for “Language”…", "Reading Language: An Introduction to the Study of Speech…"),
+    seen, not said (`aria-hidden`), and on his panel in VR. A newer question, or the answer taken
+    away, stops the reading: its request is cancelled, and the server stops the model's turn (§4).
+  - **In VR** his panel follows the card: "Looking…", then what he is doing in the answer's place
+    until a first answer comes (or, with none, his reading's), then the first answer (up to 3
+    lines) with what he is doing on a line under it, then his reading's sentences with their
+    numbers in brackets (`citedText`), all of them (up to 7 lines), and its sources numbered as its
+    list. A step changes only that line's
+    words (`Panel.set`): the panel is drawn again only when something on it changes, never per
+    frame. Taking a find from it stops the reading as the card's does.
+  - **His voice** says only the answer he ends with, its sentences without the numbers
+    (`answer.text`); the first answer is not said.
 - **The evaluation** (`tools/librarian-eval.mjs`, `tools/librarian-questions.json`): 24
   questions over the demo set (`tools/demo-set.txt`), 4 with no answer there. Each model is
   warmed up (timed) and each question read as the page would, with the server in the same
@@ -2834,7 +2867,9 @@ Step 3 is VR and the voice.
   stand-in for the server: which model (none without one, or when it cannot be reached), a turn
   sent and its failures said, the warm-up at most every ten minutes, asking again after a while.
   `test/client-librarian.test.js` covers a place's lines in the card, the numbered list, a place
-  taken to and `citedText`; `test/client-librarian-desk.test.js` a reading on his panel.
+  taken to and `citedText`; `test/client-librarian-desk.test.js` a reading on his panel (the
+  first answer not said, the step under it and drawn again only when it changes, the sources'
+  Take me there stopping the reading, the answer's lines, the hint, the warm-up as it opens).
 
   Step 2 checked in headless Chrome against a server of this checkout's with gemma4:12b, over the
   demo set (2026-11-07):
@@ -2853,3 +2888,29 @@ Step 3 is VR and the voice.
     than the screen.
   - On a TV (`?tv=emulate`) the answer's first source took the focus.
   - axe with the help open and with an answer shown: nothing on a desktop, a phone or a TV.
+
+  Step 3 checked the same way (2026-11-07), his reading and his voice chosen before the page, what
+  he said recorded from `speechSynthesis.speak`:
+  - On a desktop the box's focus warmed the model up. "Where and when did Edward Sapir sign the
+    preface of his book Language?", which the catalogue finds nothing for, showed "Looking…" with
+    his steps under it, then in 2.6 s "Edward Sapir signed the preface in Ottawa, Ont. He signed it
+    on April 8, 1921." with the preface's two lines as sources, said once. "What is insulin?"
+    showed the catalogue's 5 articles in 0.3 s with "Reading for an answer…" under them (the
+    status adding "I am reading for an answer."), nothing said; in 3.5 s his three sentences from
+    the Insulin article replaced them, and only they were said. "Who wrote Language: An
+    Introduction to the Study of Speech?" with its book taken at once: the reading's request was
+    cancelled, the step went, the first answer stayed, he walked and the book came out.
+  - On a phone the box let go of the focus at the first answer, and nothing was wider than the
+    screen.
+  - On a TV (`?tv=emulate`) the first answer's first find took the focus, then his first source.
+  - In VR (`?xr=emulate`) the trigger on him opened his panel and warmed the model up; before a
+    question it said "Ask me a question, or for a title, an author or a subject." "what is
+    insulin" typed on its keys and Ask: the first answer with its 5 finds and the step under it in
+    0.2 s, then his three sentences, each with [1], in 6 lines, and the source numbered, in 2.3 s,
+    said once. The panel was drawn 6 times from Ask to the answer, 0.7–4.9 ms each on the PC.
+    Draw calls at one pose, both eyes: 66 with the panel closed, 68 open while he read. A sampled
+    heap profile of the reading found allocations only in what runs once per question or step
+    (the panel refilled, the reading, the rule), nothing per frame. Source 1, by the trigger,
+    walked, and the volume opened with the passage's block on the left-hand page.
+  - axe while he read and with his answer: nothing on a desktop, a phone or a TV. The server
+    logged nothing.

@@ -5,7 +5,7 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 (CLAUDE.md, "Branches and sites"). These are the proposals, cheapest first, each one something to
 try on its own.
 
-**Built so far** (SPEC §5.10): experiment 1, all four steps, and experiment 2's first two.
+**Built so far** (SPEC §5.10): experiment 1, all four steps, and experiment 2's first three.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -43,10 +43,17 @@ try on its own.
   experiment 1. A newer question stops the reading, at the model too, and the model is warmed up
   as the box takes the focus. On the static site nothing changes. With gemma4:12b an answer took
   2.6–3.6 s on the development PC.
+- **Experiment 2, step 3: first, in VR and aloud.** What the catalogue finds comes at once, as in
+  experiment 1, with what he is doing on a line under it, and his reading's answer then takes its
+  place; taking one of those first finds stops his reading. When the catalogue finds nothing
+  (often, for a question asked as a question) he shows what he is doing until his answer comes. In VR his panel shows the same: what
+  he is doing, then his sentences with their sources' numbers and the sources as its list, each a
+  *Take me there*. It is drawn again only when its words change, and opening it warms the model
+  up. With his voice chosen he says the answer he ends with, without the numbers.
 
-Next: experiment 2's step 3, VR and the voice: his reading checked in a headset (his panel with
-the sources and what he is doing, a question typed on the stand's keyboard, the draw calls, and
-nothing allocated per frame while he reads), and his answers said aloud.
+Next: experiment 2's step 4, after a test of its own: whether the Pages site can talk to a
+visitor's own Ollama directly. Or experiment 3, cross-references between libraries. His reading
+in VR has been checked with the emulator only, not yet on a Quest itself.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,

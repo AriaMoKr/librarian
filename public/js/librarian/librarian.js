@@ -15,10 +15,12 @@
 //   site) and it is chosen in the help ("The librarian reads the books…", off at first), a
 //   question goes to it, which reads the library through the tools (tools.js, over search.js and
 //   api.js) and answers with what it read (read.js, cite.js); the answer's sources are its finds.
-//   Nothing he read says it, or the model failed: what the catalogue has (experiment 1's answer).
-//   The model is warmed up as the question box takes the focus.
+//   What the catalogue has (experiment 1's answer) comes first, at once, when it found something,
+//   while he reads on; his reading's answer replaces it. Nothing he read says it, or the model
+//   failed: that answer stays, with why. The model is warmed up as the question box takes the
+//   focus and as his panel opens.
 // Experiment 1: step 1, the words in the card; step 2, the figure and his panel; step 3, the walk;
-// step 4, his voice. Experiment 2: step 2, his reading in the card.
+// step 4, his voice. Experiment 2: step 2, his reading in the card; step 3, on his panel and aloud.
 
 import { findText, getBookMeta, getChunk } from '../api.js';
 import { bookIndex, findArticles, findInText } from '../search.js';
@@ -28,7 +30,7 @@ import { FAILED, LibrarianCard } from './card.js';
 import { Desk } from './desk.js';
 import { ServerModel } from './model.js';
 import { answerOf, couldNotRead, readFor, warmTurn } from './read.js';
-import { LibraryTools, stepText } from './tools.js';
+import { FIRST_STEP, LibraryTools, stepText } from './tools.js';
 import { Voice } from './voice.js';
 
 /** Its storage key (util/storage.js): { shown, speaks, reads }. */
@@ -93,11 +95,13 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     place: (libId, hit) => findText(libId, hit),
   };
   const card = new LibrarianCard({
-    ask: async (text, { signal, onStep }) => {
+    ask: async (text, { signal, onStep, onFirst }) => {
       const { libraries, booksByLib } = catalogue();
-      // What the catalogue has (experiment 1): his answer without reading, and when reading finds nothing.
+      // What the catalogue has (experiment 1): his answer without reading, the first one while he
+      // reads, and the one that stays when his reading finds nothing.
       const plain = ask(text, {
         libraries,
+        prompt: card.prompt, // a question too while he reads
         index: () => bookIndex(libraries, booksByLib), // the search box's, made at the first search
         findArticles: (q) => findArticles(libraries, q, MAX_FINDS + 1), // one more than shown: "and more"
         findInText: (q) => findInText(libraries, q, MAX_FINDS + 1),
@@ -108,6 +112,13 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
       // A greeting, or nothing asked yet: what to ask him, without the model.
       if (!model || !reads() || parseQuestion(text).empty) return plain;
       const tools = new LibraryTools(access);
+      onStep(FIRST_STEP);
+      // Shown at once while he reads on, when it found something (card.js: his reading's answer
+      // replaces it). One that found nothing ("I have nothing called …", as a question asked as a
+      // question often gets) would only be contradicted: "Looking…" and his steps show instead.
+      plain.then((first) => {
+        if (!signal.aborted && first.finds.length) onFirst(first);
+      });
       let reading;
       try {
         reading = await readFor(text, {
@@ -171,7 +182,8 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     say: (text) => voice.say(text),
     stop: () => voice.stop(),
   };
-  const desk = new Desk({ interaction, card, take, multi, intoBox, onWalk, speech });
+  // His panel opening warms up his reading's model, as the card's box taking the focus does (below).
+  const desk = new Desk({ interaction, card, take, multi, intoBox, onWalk, speech, onOpen: () => warmUp() });
   // For the console and scripted checks: __vrlbry.interaction.librarian.
   interaction.librarian = { card, desk, voice, model };
   // Out of VR his panel goes: on a screen the card is his.
@@ -235,6 +247,7 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   const readText = /** @type {HTMLElement} */ (readPref.querySelector('span'));
   const showReads = () => {
     card.setReading(reads());
+    desk.refresh(); // his panel's hint as the box's
     readPref.hidden = !modelInfo;
     if (!modelInfo) return;
     readBox.disabled = !modelInfo.ready;

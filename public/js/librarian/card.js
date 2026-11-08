@@ -2,13 +2,17 @@
 // The librarian in the library card (SPEC §5.10; docs/LIBRARIAN.md, experiments 1 and 2): "Ask the
 // librarian", a question box and its Ask button; the answer under them, a polite status said once,
 // when it is complete; and what was found, each a button that takes you there. When he reads the
-// books for his answers (experiment 2: librarian.js), what he is doing shows meanwhile, a newer
-// question stops it, and his sentences carry the numbers of their sources, which are the finds.
+// books for his answers (experiment 2: librarian.js), what the library's own search found comes
+// first, at once (when it found something), and what he is doing shows under it while he reads on;
+// his reading's answer then replaces it, its sentences carrying the numbers of their sources,
+// which are the finds. A newer question stops the reading, and so does taking one of the first
+// answer's finds.
 // On a TV the remote steps through it as through the rest of the card (ui/remote.js); an answer's
-// first find takes the focus from its question there, so OK takes you to it.
+// first find takes the focus from its question there, so OK takes you to it. A find with the focus
+// as the answer is replaced keeps it, or gives it to the first of the new.
 
 import { imageSource } from '../api.js';
-import { findLines } from './ask.js';
+import { findLines, PROMPT, PROMPT_READING } from './ask.js';
 
 /** ms before "Looking…" is shown and said: a quick answer comes alone. */
 const LOOKING_AFTER = 400;
@@ -108,14 +112,21 @@ function fillImages(root) {
 /** Whether the screen is touched (a phone's keyboard covers the answer while the box has the focus). */
 const coarse = () => !!globalThis.matchMedia?.('(pointer: coarse)').matches;
 
+/** Whether two answers' finds are the same finds, in the same order (the list shown can stay). @param {readonly unknown[]} a @param {readonly unknown[]} b */
+const sameFinds = (a, b) => a.length === b.length && a.every((f, i) => f === b[i]);
+
+/** Said after a first answer, not seen (the line under it shows what he is doing). */
+const READING_ON = 'I am reading for an answer.';
+
 /** The question box's hint: what to ask him; with his reading, a question too. */
 const PLACEHOLDER = 'A title, an author or a subject';
 const PLACEHOLDER_READING = 'A question, a title, an author or a subject';
 
 /**
- * How the card asks: the question, a signal that stops it (a newer question), and what he is
- * doing meanwhile (his reading's steps).
- * @typedef {(text: string, o: { signal: AbortSignal, onStep: (text: string) => void }) => Promise<import('./ask.js').Answer>} Ask
+ * How the card asks: the question, a signal that stops it (a newer question), what he is doing
+ * meanwhile (his reading's steps), and an answer to show at once while he reads on (onFirst: the
+ * library's own search's), which the one it resolves to replaces.
+ * @typedef {(text: string, o: { signal: AbortSignal, onStep: (text: string) => void, onFirst: (answer: import('./ask.js').Answer) => void }) => Promise<import('./ask.js').Answer>} Ask
  */
 
 export class LibrarianCard {
@@ -173,6 +184,10 @@ export class LibrarianCard {
     this._stepEl = /** @type {HTMLElement} */ (el.querySelector('.lb-step'));
     /** What he is doing now ('' when not reading), for his panel too. */
     this.step = '';
+    /** Whether he reads on for the question, the answer shown a first one (his panel and voice follow). */
+    this.reading = false;
+    /** What he says to ask him (a greeting's answer; his panel before a question): a question too while he reads. */
+    this.prompt = PROMPT;
     /** @type {HTMLFormElement} */ (el.querySelector('.lb-form')).addEventListener('submit', (e) => {
       e.preventDefault();
       this.askNow(this.input.value);
@@ -186,7 +201,8 @@ export class LibrarianCard {
 
   /**
    * Asks a question, as Ask does: "Looking…" while the answer is on its way (said only when it
-   * takes a while), then the answer, said once, and its finds.
+   * takes a while), then the answer, said once, and its finds. While he reads, a first answer
+   * comes at once, and his reading's replaces it.
    * @param {string} text
    */
   async askNow(text) {
@@ -197,6 +213,7 @@ export class LibrarianCard {
     clearTimeout(this._lookingTimer);
     this._list.setAttribute('aria-busy', 'true');
     this._setStep('');
+    this.reading = false;
     this.onLooking?.();
     this._lookingTimer = setTimeout(() => {
       if (token === this._token) this._say('Looking…');
@@ -209,6 +226,9 @@ export class LibrarianCard {
         onStep: (step) => {
           if (token === this._token) this._setStep(step);
         },
+        onFirst: (first) => {
+          if (token === this._token && this._asking === asking) this._show(first, { first: true });
+        },
       });
     } catch (err) {
       if (token !== this._token) return; // a newer question stopped it
@@ -217,8 +237,21 @@ export class LibrarianCard {
     }
     if (token !== this._token) return;
     this._asking = null;
-    clearTimeout(this._lookingTimer);
     this._show(answer);
+  }
+
+  /**
+   * His reading stopped, the first answer staying as the answer (one of its finds taken: the
+   * visitor has what they came for). Nothing while he is not reading.
+   */
+  stopReading() {
+    if (!this.reading) return;
+    this._token++;
+    this._asking?.abort();
+    this._asking = null;
+    this.reading = false;
+    this._setStep('');
+    this._answerEl.querySelector('.ov-sr')?.remove(); // not reading on (a removal is not said)
   }
 
   /** What he is doing while he reads ('' for nothing). @param {string} text */
@@ -230,64 +263,100 @@ export class LibrarianCard {
     this.onStep?.(text);
   }
 
-  /** @param {import('./ask.js').Answer} answer */
-  _show(answer) {
+  /**
+   * Shows an answer: its words in the status, said once, and its finds. A first one (`first`: the
+   * library's own search's, while he reads on) has what he is doing under it, and is replaced by
+   * his reading's. Finds the same as those shown stay as they are (his reading found nothing, or
+   * could not read); a find with the focus keeps it in the new list, or gives it to the first.
+   * @param {import('./ask.js').Answer} answer
+   * @param {{ first?: boolean }} [o]
+   */
+  _show(answer, { first = false } = {}) {
+    clearTimeout(this._lookingTimer);
+    const before = this.answer;
     this.answer = answer;
-    this._setStep('');
-    const had = this.el.contains(document.activeElement);
-    const list = findList(document, answer.finds, {
-      multi: this._multi(),
-      numbered: !!answer.statements,
-      take: (find, button) => {
-        // As the search's results: the book's keys are the view's again (Enter reads it, not this
-        // button), and on a TV the remote walks again, the book in hand.
-        button.blur();
-        this._take(find);
-      },
-    });
-    list.hidden = !answer.finds.length;
-    this._list.replaceWith(list);
-    fillImages(list);
-    this._say(answer.text, answer.statements);
+    this.reading = first;
+    if (!first) this._setStep('');
+    const focused = document.activeElement;
+    const had = this.el.contains(focused);
+    const old = this._list;
+    const buttons = [...old.querySelectorAll('button')];
+    const at = had ? buttons.indexOf(/** @type {HTMLButtonElement} */ (focused)) : -1;
+    const numbered = !!answer.statements;
+    let list = old;
+    if (before && sameFinds(before.finds, answer.finds) && !!before.statements === numbered) {
+      old.removeAttribute('aria-busy');
+    } else {
+      list = findList(document, answer.finds, {
+        multi: this._multi(),
+        numbered,
+        take: (find, button) => {
+          // As the search's results: the book's keys are the view's again (Enter reads it, not this
+          // button), and on a TV the remote walks again, the book in hand. A first answer's find
+          // taken: he stops reading.
+          button.blur();
+          this.stopReading();
+          this._take(find);
+        },
+      });
+      list.hidden = !answer.finds.length;
+      old.replaceWith(list);
+      fillImages(list);
+    }
+    this._say(answer.text, answer.statements, first);
     this.onAnswer?.(answer);
     if (!had) return;
-    if (this.tv && answer.finds.length) /** @type {HTMLElement} */ (list.querySelector('button')).focus();
+    const shown = /** @type {NodeListOf<HTMLElement>} */ (list.querySelectorAll('button'));
+    if (at >= 0) {
+      // The find with the focus as its list went: the same find in the new one, else its first.
+      if (list === old) return;
+      const j = answer.finds.indexOf(/** @type {import('./ask.js').Find} */ (before?.finds[at]));
+      (shown[Math.max(0, j)] ?? this.input).focus();
+    } else if (this.tv && shown.length) shown[0].focus();
     else if (coarse() && document.activeElement === this.input) this.input.blur(); // the keyboard down, the answer seen
   }
 
   /**
    * The answer in its status, said once by a screen reader (emptied first, so the same words are
    * said again). A reading's sentences each end with the numbers of their sources, which are seen,
-   * not said: the list of sources under it is numbered.
+   * not said: the list of sources under it is numbered. After a first answer, while he reads on,
+   * that is said too (the line under it, seen, is not).
    * @param {string} text
    * @param {Array<{ text: string, cites: number[] }>} [statements]
+   * @param {boolean} [readingOn]
    */
-  _say(text, statements) {
+  _say(text, statements, readingOn = false) {
     clearTimeout(this._sayTimer);
     this._answerEl.textContent = '';
     this._sayTimer = setTimeout(() => {
-      if (!statements) {
-        this._answerEl.textContent = text;
-        return;
-      }
       /** @type {Node[]} */
       const parts = [];
-      for (const [i, s] of statements.entries()) {
-        parts.push(document.createTextNode(`${i ? ' ' : ''}${s.text}`));
-        if (!s.cites.length) continue;
-        const sup = document.createElement('sup');
-        sup.className = 'lb-cite';
-        sup.setAttribute('aria-hidden', 'true');
-        sup.textContent = s.cites.join(',');
-        parts.push(sup);
+      if (!statements) parts.push(document.createTextNode(text));
+      else {
+        for (const [i, s] of statements.entries()) {
+          parts.push(document.createTextNode(`${i ? ' ' : ''}${s.text}`));
+          if (!s.cites.length) continue;
+          const sup = document.createElement('sup');
+          sup.className = 'lb-cite';
+          sup.setAttribute('aria-hidden', 'true');
+          sup.textContent = s.cites.join(',');
+          parts.push(sup);
+        }
+      }
+      if (readingOn && this.reading) {
+        const more = document.createElement('span');
+        more.className = 'ov-sr';
+        more.textContent = ` ${READING_ON}`;
+        parts.push(more);
       }
       this._answerEl.replaceChildren(...parts);
     }, 50);
   }
 
-  /** His reading chosen or not (librarian.js): the box asks for a question too. @param {boolean} on */
+  /** His reading chosen or not (librarian.js): the box, and he, ask for a question too. @param {boolean} on */
   setReading(on) {
     this.input.placeholder = on ? PLACEHOLDER_READING : PLACEHOLDER;
+    this.prompt = on ? PROMPT_READING : PROMPT;
   }
 
   /** No question, no answer. */
@@ -297,6 +366,7 @@ export class LibrarianCard {
     this._asking = null;
     clearTimeout(this._lookingTimer);
     clearTimeout(this._sayTimer);
+    this.reading = false;
     this._setStep('');
     this.answer = null;
     this._answerEl.textContent = '';

@@ -33,11 +33,13 @@ speaks his answers*, or *Voice* on his panel).
 
 The second is built for a server of your own, with a model of [Ollama](https://ollama.com/)'s on
 the same machine (`--ollama gemma4:12b`, below). Choose *The librarian reads the books to answer
-questions* in the help, and he searches and reads the books for your question while you see what
-he is doing, then answers in a sentence or three. Each sentence carries the numbers of what it
-comes from, listed under it, and *Take me there* on a passage opens its book at that paragraph. A
-sentence its sources do not say is struck before you see it; with nothing left he says "I found
-nothing that says so." The website has no model, so there he answers as in the first.
+questions* in the help: anything the catalogue finds comes at once, as in the first, and he searches
+and reads the books for your question while you see what he is doing, then answers in a sentence
+or three in its place. Each sentence carries the numbers of what it comes from, listed under it,
+and *Take me there* on a passage opens its book at that paragraph. A sentence its sources do not
+say is struck before you see it; with nothing left he says "I found nothing that says so." In VR
+his panel shows the same, and with his voice chosen he says the answer he ends with. The website
+has no model, so there he answers as in the first.
 
 The librarian will always be optional (the help's *Show the librarian* turns it off): the library
 works as it does without it, the page reports nothing about its visitors, and a question goes to a
