@@ -2108,21 +2108,55 @@ export class Interaction {
         }
         dest = { libId: book.libId, id: to.book, at: { c: to.c, b: to.b ?? 0, ...(to.f ? { f: to.f } : {}) } };
       }
-      audio.click();
-      const from = this._here(view);
-      this._trail.push(from);
-      if (this._trail.length > 100) {
-        this._trail.shift();
-        this._trailBase++;
-      }
-      const shown = await this._goTo(dest);
-      if (!shown && this._trail.at(-1) === from) this._trail.pop();
-      // The browser's Back comes back here too (back-history.js).
-      else if (shown) this.backHistory?.pushed(this._trailBase + this._trail.length);
+      await this._follow(dest, view);
     } finally {
       this._following = false;
       this._showBack();
     }
+  }
+
+  /**
+   * Goes to a place as a link of the open book does, though no link of its text leads there (the
+   * librarian's "Mentioned here": an article of another library): where the reader was goes on
+   * the trail, so Back brings the book back at its page.
+   * @param {{ libId: string, id: string, at: { c: number, b: number } }} dest a place in a book of
+   *   any library on the shelves
+   * @returns {Promise<boolean>} whether the place is shown
+   */
+  async followTo(dest) {
+    if (this.state !== 'read' || this._turnBusy || this._following) return false;
+    this._following = true;
+    try {
+      return await this._follow(dest, null);
+    } finally {
+      this._following = false;
+      this._showBack();
+    }
+  }
+
+  /** The step onto the trail and the going there, of followLink and followTo. */
+  async _follow(dest, view) {
+    audio.click();
+    const from = this._here(view);
+    this._trail.push(from);
+    if (this._trail.length > 100) {
+      this._trail.shift();
+      this._trailBase++;
+    }
+    const shown = await this._goTo(dest);
+    if (!shown && this._trail.at(-1) === from) this._trail.pop();
+    // The browser's Back comes back here too (back-history.js).
+    else if (shown) this.backHistory?.pushed(this._trailBase + this._trail.length);
+    return shown;
+  }
+
+  /**
+   * The spread shown of the open book ({ left, right }: a page's ref, 'blank' or 'ex'; the reader's
+   * blocksOn tells a page's blocks), a new one at each turn; null while no book is read. For what
+   * reads the open pages (the librarian's "Mentioned here").
+   */
+  get spreadShown() {
+    return this.state === 'read' ? this._cur?.spread ?? null : null;
   }
 
   /**

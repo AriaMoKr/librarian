@@ -69,6 +69,18 @@ const TITLE = [
   /^(?:(?:a|an|the|any)\s+)?(?:books?|novels?|copy|copies|poems?|plays?|story|stories|works?)\s+(?:called|named|titled|entitled)\s+(.+)$/i,
 ];
 
+/**
+ * What the open pages mention (experiment 3: asked beside the open book, here-panel.js; the card
+ * is not there while a book is read).
+ */
+const HERE = [
+  /^(?:what|which articles?)\s+(?:do|does)\s+(?:this|the|these|my)\s+(?:pages?|book|article|passage|part)\s+(?:mention|name)$/i,
+  /^(?:what(?:'s| is| are)\s+)?(?:mentioned|named)\s+(?:here|on\s+(?:this|these)\s+pages?)$/i,
+];
+
+/** What he says to that in the card: where to ask it. */
+export const HERE_HOW = 'Open a book and ask me beside it, with “Mentioned here” or L: I will tell you which articles of the other libraries its pages name.';
+
 /** Words without a leading "the", "a" or "an" ("a black hole": "black hole"). @param {string} s */
 const bareOf = (s) => s.replace(/^(?:the|an?)\s+/i, '');
 
@@ -103,6 +115,8 @@ const matchOf = (patterns, s) => {
  * @property {string} whole the question as asked, without its closing punctuation: tried last
  * @property {boolean} empty whether it asks for nothing yet ("Hello", "Do you have")
  * @property {boolean} greeting whether it opens with a greeting
+ * @property {boolean} here whether it asks what the open pages mention ("What does this page
+ *   mention?"), which no search answers
  */
 
 /**
@@ -147,7 +161,10 @@ export function parseQuestion(text) {
   const q = unquote(s);
   const m = !by && wants !== 'article' ? /^(.+?)\s+by\s+(.+)$/i.exec(q) : null;
   const split = m ? { q: unquote(m[1]), by: unquote(m[2]) } : null;
-  return { q, by, wants, split, whole, empty, greeting };
+  // Asked of the pages, with or without a greeting before it ("Hello, what is mentioned here?").
+  const asked = whole.replace(OPENERS[0], '');
+  const here = HERE.some((re) => re.test(asked));
+  return { q, by, wants, split, whole, empty, greeting, here };
 }
 
 /**
@@ -278,9 +295,10 @@ function within(promise, ms) {
  */
 
 /**
- * @typedef {{ kind: 'book', book: any, lib: any } | { kind: 'article', article: any, lib: any } | { kind: 'text', hit: any, lib: any }} SearchFind
+ * @typedef {{ kind: 'book', book: any, lib: any } | { kind: 'article', article: any, lib: any, mention?: { text: string, context: string } } | { kind: 'text', hit: any, lib: any }} SearchFind
  *   something a search found: a book, an article of a Wikipedia (search.js findArticles), or a
- *   place in a book's text (findInText)
+ *   place in a book's text (findInText). An article the open pages name (experiment 3: here.js)
+ *   has its `mention`: the words as the page has them, and the words round them
  */
 
 /**
@@ -449,6 +467,8 @@ export async function ask(text, library) {
   const question = parseQuestion(text);
   const prompt = library.prompt ?? PROMPT;
   if (question.empty) return { text: question.greeting ? `Hello. ${prompt}` : prompt, finds: [], search: null };
+  // What the open pages mention is asked beside the book, not here: he says where.
+  if (question.here) return { text: HERE_HOW, finds: [], search: null };
   /** @type {Found | null} */
   let first = null;
   for (const search of searchesFor(question, library.index())) {
@@ -473,7 +493,19 @@ export function findLines(find, multi) {
   }
   if (find.kind === 'article') {
     const { title, from, book } = find.article;
-    return { title: from ? `${from} → ${title}` : String(title), line: `${find.lib.title} · Volume ${String(book).slice(1)}`, snippet: null };
+    // An article the page names: the page's words round its name, the name stressed, and few
+    // enough words before it that it shows in the two lines the card gives a snippet.
+    const said = find.mention;
+    const at = said ? said.context.indexOf(said.text) : -1;
+    /** @type {Array<[string, boolean]> | null} */
+    let snippet = null;
+    if (said && at < 0) snippet = [[said.context, false]];
+    else if (said) {
+      let before = said.context.slice(0, at);
+      if (before.length > MENTION_LEAD) before = `… ${before.slice(-MENTION_LEAD).replace(/^\S*\s+/, '')}`;
+      snippet = [[before, false], [said.text, true], [said.context.slice(at + said.text.length), false]];
+    }
+    return { title: from ? `${from} → ${title}` : String(title), line: `${find.lib.title} · Volume ${String(book).slice(1)}`, snippet };
   }
   if (find.kind === 'passage') {
     // Its book and section, and what it says, quoted (cut: the card shows two lines of it).
@@ -489,6 +521,8 @@ export function findLines(find, multi) {
 
 /** How much of a passage a find shows: two lines of the card, or of his panel's list. */
 const PASSAGE_SHOWN = 240;
+/** How much of a page's words a find shows before the name they mention. */
+const MENTION_LEAD = 40;
 
 /**
  * What the librarian says, with a reading's sources as numbers ("… 1921. [1]"), where they are

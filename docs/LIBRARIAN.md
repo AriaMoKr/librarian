@@ -6,7 +6,7 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 try on its own.
 
 **Built so far** (SPEC §5.10): experiment 1, all four steps, experiment 2's first three, and
-experiment 3's first.
+experiment 3's first two.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -59,10 +59,18 @@ experiment 3's first.
   over the demo set and holds the rule to 517 matches read by hand. What the rule offers was the
   right article 190 times of 196; what it holds back, 89 of 114; single words, which it never
   offers, 46 of 97.
+- **Experiment 3, step 2: "Mentioned here".** With a book open on a screen, his button at the
+  foot of the page (beside *Text view*; in the text view, in its toolbar), or L, lists the
+  articles of the other libraries that the open pages name, at most five, each with the page's
+  words round its name. *Take me there* brings the article into your hands as a link's page
+  comes, and Back brings your book back at your page. The other libraries' titles are got the
+  first time you ask (about a second for the demo set's 110,000, then kept), and nothing before.
+  The library card is not there while a book is read, so the question typed in it gets where to
+  ask instead. It works with a keyboard, a touch screen and a TV's remote; VR is step 4.
 
-Next: experiment 3's step 2, "Mentioned here" while reading. Experiment 2's step 4 (whether the
-Pages site can talk to a visitor's own Ollama directly) waits on a test of its own, not run yet.
-His reading in VR has been checked with the emulator only, not yet on a Quest itself.
+Next: experiment 3's step 3, "Also in the library" for the book in hand. Experiment 2's step 4
+(whether the Pages site can talk to a visitor's own Ollama directly) waits on a test of its own,
+not run yet. His reading in VR has been checked with the emulator only, not yet on a Quest itself.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,
@@ -134,7 +142,7 @@ This makes the separate ZIMs feel like one library.
 - **Steps**: 1. the rule and its measure (`tools/librarian-xref.mjs`, over matches read by hand);
   2. "Mentioned here": asked while you read, he lists the articles of other libraries that the
   open pages name, each a *Take me there* that brings the article into your hands, with Back
-  bringing your book back at your page; 3. "Also in the library", for the book in hand: its
+  bringing your book back at your page (built, on a screen); 3. "Also in the library", for the book in hand: its
   author's article, its own, the same work in another library and the author's other books
   (nothing in the demo set: it shows with bigger collections); 4. in VR and aloud.
 - **Later**: looser connections with experiment 2's model, which could also tell one sense from

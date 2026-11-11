@@ -36,6 +36,27 @@
    while reading: a phone's card would hide the walk, and a click or tap anywhere is there at once. */
 #overlay.lb-walking :is(.ov-card, .ov-search, .ov-hint) { opacity: 0; pointer-events: none !important; }
 
+/* "Mentioned here" (experiment 3; here-panel.js): his button beside the open book, in the bar at
+   the page's foot as its "Text view" (in the text view's toolbar it is one of that bar's buttons,
+   styled there), and the list it opens over the view's corner, above that bar. Over the text view
+   too (its z-index is 3), as the toasts are. */
+.ov-bottom .lb-here-btn { height: 42px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); font-weight: 600; white-space: nowrap; backdrop-filter: blur(8px); }
+.ov-bottom .lb-here-btn[aria-expanded="true"] { background: var(--accent); color: #24170a; }
+#overlay:not(.ov-reading) .lb-here-btn, #overlay:not(.ov-reading) .lb-here { display: none; }
+.lb-here { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 54px); z-index: 4;
+  width: min(400px, calc(100vw - 32px)); max-height: min(62vh, 540px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); font: 15px/1.45 var(--font);
+  box-shadow: 0 10px 30px rgba(0,0,0,.5); text-align: left; }
+.lb-here-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lb-here-title { margin: 0; font: 600 16px/1.25 var(--serif); color: var(--accent); }
+.lb-here-close { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--accent); font: 600 18px/1 var(--font); }
+.lb-here-close:hover { border-color: var(--accent); }
+.lb-here button { color: inherit; cursor: pointer; }
+.lb-here button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .lb-here { left: 12px; right: 12px; width: auto; max-height: 56vh; }
+}
+
 /* With an answer in it the card grows taller than it did without the librarian: it stops above the
    hint at the foot (style.css keeps it only within the screen), and on a phone held upright above
    the search field and the buttons, with one scroll, the card's, not one inside it. A short screen
@@ -60,6 +81,12 @@ html.tv :is(.lb-q, .lb-answer, .lb-find-title) { font-size: 18px; }
 html.tv :is(.lb-find-line, .lb-find-snip, .lb-find-go, .lb-go, .lb-step) { font-size: 16px; }
 html.tv .lb-cite { font-size: 13px; }
 html.tv .lb-num { font-size: 17px; }
+/* "Mentioned here": with his button the foot's row of a book's buttons wraps to a second on a
+   960 px screen, so the remote's hint stands above both rows, and his list above the hint. */
+html.tv #overlay.ov-reading:focus-within:has(.ov-bottom .lb-here-btn:not([hidden])) .ov-hint { bottom: calc(var(--tv-edge-y) + 104px); }
+html.tv .lb-here { left: 50%; right: auto; transform: translateX(-50%); bottom: calc(var(--tv-edge-y) + 150px); width: min(560px, calc(100vw - 2 * var(--tv-edge-x)));
+  max-height: calc(100vh - 2 * var(--tv-edge-y) - 150px); font-size: 18px; }
+html.tv .lb-here-title { font-size: 19px; }
 html.tv .lb-find:focus { background: rgba(217, 178, 106, .34); outline: 4px solid #ffd98a; outline-offset: -4px; box-shadow: none; }
 html.tv .lb-find:focus :is(.lb-find-line, .lb-find-go) { color: var(--text); }
 html.tv .lb-find:focus .lb-find-snip b { color: #ffd98a; }

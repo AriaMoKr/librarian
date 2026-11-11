@@ -1220,7 +1220,10 @@ public/
     librarian/tools.js   LibraryTools: the library as a model's tools (search, read, find), all it showed kept by id (pure but for the library).
     librarian/read.js    readFor: a model reads for a question through the tools, turn by turn; finish: its answer held to the rule (pure).
     librarian/cite.js    the citation rule: checkAnswer keeps the sentences that what they cite says (pure).
-    librarian/xref.js    links between libraries: the words of a text that are another library's article (matchesIn, mentionsIn), an author's names and a book's titles as articles (pure; not on the page yet).
+    librarian/xref.js    links between libraries: the words of a text that are another library's article (matchesIn, mentionsIn), an author's names and a book's titles as articles (pure).
+    librarian/titles.js  TitleShelf: the Wikipedias' titles kept at hand, each library's got once (a site's list, or its volumes' contents).
+    librarian/here.js    "Mentioned here": the mentions on the open pages (mentionsOn) and his answer (lookHere) (pure but for what it is given).
+    librarian/here-panel.js  HerePanel: his button beside the open book and the list it opens (a screen's).
     librarian/model.js   ServerModel: the server's model as the page reaches it (§4): which one, a turn, the warm-up.
     librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choices, his reading.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
@@ -1556,7 +1559,11 @@ States: `browse` → `inspect` → `opening` → `read` (and back), plus `busy` 
   librarian's, §5.10): `addPanel(panel)` joins the kiosk's and the others (hit, hovered, updated);
   `addTarget(t)` is a thing to point at, `t.hit(ray, far)` its distance or Infinity (making no
   objects), `t.select(pointer)` on a select while browsing (solid in other states), `t.hover(on)`
-  every frame; `onFrame(fn)` runs `fn(dt)` at the end of each update. Hover a book → `shelves.setHighlight`, tooltip
+  every frame; `onFrame(fn)` runs `fn(dt)` at the end of each update. For what reads the open
+  pages (§5.10, "Mentioned here"): `spreadShown` is the spread shown while a book is read
+  (`{ left, right }`, a new one at each turn; null otherwise), and `followTo({ libId, id, at })`
+  goes to a place in a book of any library on the shelves as a link does, the place left going on
+  the trail (Following, below). Hover a book → `shelves.setHighlight`, tooltip
   panel near the book with title / author. Select → book leaves its slot (`hideBook`, a `Book3D`
   at its slot transform) and flies (~0.5 s ease) to ~0.45 m in front of the viewer at chest height,
   turning to show the cover → **inspect**. **Room first** (`world/room-ahead.js` `makeRoom`): the
@@ -2369,8 +2376,8 @@ to Ollama, measured over 24 questions; its step 2 (2026-11-07): his reading in t
 server has a model and it is chosen; and its step 3 (2026-11-07): the library's own answer first
 while he reads on, his reading on his panel in VR, and his voice saying the answer he ends with
 (Answers with citations, below). Experiment 3's step 1 (2026-11-11): the rule for links between
-libraries and its measure over the demo set (Links between libraries, below); nothing of it is on
-the page yet.
+libraries and its measure over the demo set; and its step 2 (2026-11-11): "Mentioned here", his
+button beside the open book on a screen (Links between libraries, below).
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
   the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks, reads }` (kept whole)
@@ -2587,9 +2594,10 @@ the page yet.
   one scroll: the library list's own scroll goes (`:has`). A short screen and a TV keep their own
   rules. While he leads the way the card, the search and the hint fade (`#overlay.lb-walking`).
 - **Scenes** (`overlay.addUiPart('librarian', …)`): the question and the answer shown are kept
-  as `ui.page.librarian = { q, answer }`, with `panel: true` while his panel is open. When a scene
-  is restored, a question that had an answer is asked again, and in a headset the panel opens
-  again.
+  as `ui.page.librarian = { q, answer }`, with `panel: true` while his panel is open and `here:
+  true` while his list of what the pages mention is. When a scene is restored, a question that had
+  an answer is asked again, in a headset the panel opens again, and the list is asked for again
+  where its book is open already.
 - **Tests.** `test/client-librarian.test.js` covers:
   - the questions read and the searches tried;
   - the answers;
@@ -2922,8 +2930,8 @@ page, below).
 
 While a book or an article is read, he is to offer what the other libraries have on it
 (docs/LIBRARIAN.md). Step 1 (2026-11-11) is the rule and its measure: `librarian/xref.js` and
-`tools/librarian-xref.mjs`. The page does not use them yet; steps 2 to 4 will ("Mentioned here"
-while reading, "Also in the library" for the book in hand, in VR and aloud).
+`tools/librarian-xref.mjs`. Step 2 (2026-11-11) is "Mentioned here" on a screen (below, after the
+rule). Steps 3 and 4 are to come: "Also in the library" for the book in hand, and VR and aloud.
 
 - **Why words.** Counted over the demo set: no author or title of its 19 Gutenberg books (class
   P, the study of language) is an article of its Wikipedias, and every link kept in an article
@@ -2970,10 +2978,16 @@ while reading, "Also in the library" for the book in hand, in VR and aloud).
   Held back, for one: "Large numbers of bats" (mathematics' *Large numbers*) and a fungus's
   "nuclear fusion" (physics'), each alone. What stands near the ends of the blocks given may lack
   its company: a page's mentions are taken from the text round it. A single word is never a match.
-- **The titles** (`Titles`): `add(lib, title, ref)` keeps a title of up to 8 words by its key
+- **The titles** (`Titles`): `add(lib, title, ref)` keeps a title of two to 8 words by its key
   (`keyOf`: its words in lower case, one space apart), with what its keeper needs to open the
   article (`ref`); `get(key)` gives the entries of a key. `matchesIn` takes anything with that
-  `get`.
+  `get`. A page keeps a hundred thousand of them, so an entry is its library, its title and its
+  ref, nothing more; its words and marks are taken when a text first has its words
+  (`entryTokens`). Titles of one word are kept only with `{ single: true }` (the count's, for
+  what the rule leaves out).
+- **The text round some blocks** (`windowOf(blocks, first, last, margin)`): those blocks and
+  their neighbours until `margin` characters of text come before and after, led by a heading of
+  sources where they begin under one. What stands on a page is told from it (below).
 - **An author and a title as articles** (for step 3; an article found must still say it is
   theirs):
   - `authorNames(author)`: the names an author may have an article under, the fullest first.
@@ -3053,3 +3067,105 @@ while reading, "Also in the library" for the book in hand, in VR and aloud).
   a surname and a book's titles; and the list read by hand: each of its matches found again in
   its sentence, none of the single words and loose matches, the mentions among them right 19
   times in 20 (at least 150 read), and what is held back right less often.
+
+**Mentioned here** (step 2, 2026-11-11): asked while a book is open on a screen, he lists the
+articles of other libraries that the open pages name, and each is a *Take me there*.
+
+- **Where it is asked.** The library card is not there while a book is read (§5.6), so the
+  button is his own (`here-panel.js`, `HerePanel`): "Mentioned here", in the bar at the page's
+  foot after "Text view", shown only while a book is read and he is shown. While the text view
+  is open (the foot's bar is under it) the button is in the text view's toolbar, before "Put
+  back", and the list in the text view's layer (`place`; `librarian.js` moves them as the text
+  view opens and closes). **L** does the same from the view and from the text view's text (in
+  browse and inspect it still goes to the card's box). Not in VR (step 4).
+- **The list** opens over the view's corner, above the foot's bar: a heading, a ×, his answer in
+  a `role="status"` said once (50 ms after it is emptied), what he is doing meanwhile on a line
+  under it (seen, not said), and the finds as the card lists them (`findList`), the first with
+  the focus. "Looking…" shows when the answer takes over 400 ms.
+  - It keeps its own keys (`data-own-keys`: the view's page turns wait). Esc, its × or the
+    button close it: on a TV the button has the focus again, elsewhere nothing has, so the
+    view's keys turn pages again.
+  - It closes too when the focus leaves it (a click or a tap on the view; a TV's Back, which
+    walks again) and when the pages it was asked of are no longer the ones shown (`sync`, each
+    frame, making nothing: a turned page, a link followed, the book put back).
+- **The pages** (`here.js`): `partsOf(spread, reader)` gives the parts (chunks) the shown pages
+  are in and the blocks some of which are on them (`reader.blocksOn`), and how many pages that is
+  (one in the single-page view). In the text view they are the 3D book's pages at the reader's
+  place.
+- **The mentions on them** (`mentionsOn(blocks, first, last, titles, { own })`): the matches
+  that stand are told from the text round the pages (`windowOf` with `NEAR`: a mention's company
+  may stand on the page before), and those with a place on the pages are offered as the pages
+  have them, in their order, each with the words round it there.
+- **The titles at hand** (`titles.js`, `TitleShelf`). Finding mentions takes every library's
+  titles (step 1's count), so each Wikipedia's are got once, when first asked for, and kept
+  (`of(libraries, { onGetting })`, all those wanted at once; `keep(libraries)` lets go of those
+  no longer in the catalogue). Nothing is got before someone asks.
+  - How (`TitlesAccess`, the page's in `librarian.js`): a static site's list of them
+    (`api/library/<id>/titles.json`, the search's own, §4); else volume by volume, 4 at a time, a
+    volume's contents (`toc`) being its articles' titles: the server's `…/books/<volume>`, or for
+    a library opened in the browser the worker's (`local.meta`).
+  - The book's own library's titles are got too when it is a Wikipedia: they tell which words
+    are its own articles, no link to another library.
+  - Left out, and said: a library still being indexed, and one of more than 200,000 articles
+    (`MOST_ARTICLES`: its titles would be no short list). When the book's own library is that
+    large he cannot tell, and says so.
+- **His answer** (`lookHere`): at most 5 finds (`MAX_FINDS`), each `{ kind: 'article', article:
+  { title, book, n }, lib, mention: { text, context } }`, the first library in the catalogue's
+  order where several have the article. "These pages name 3 articles of other libraries." (one:
+  "… one article of another library."; more than 5: "…; here are the first 5."; a single page:
+  "This page names …"), or "I see nothing on these pages that another library has an article
+  on."; then what was not looked in ("I could not get the titles of …", "… is too large for me
+  to look in.", "… is still being indexed."). With no other Wikipedia: "No other library here has
+  articles for me to look in." A find's lines (`findLines`): the article's title, its library and
+  volume, and the page's words round its name, the name stressed, with at most 40 characters of
+  them before it (so it shows in the snippet's two lines).
+- **Take me there** (`takeThere`): a find with a `mention`, a book being read, is followed as a
+  link of the book is (`interaction.followTo`, §5.6): the book goes back, the article's volume
+  comes into the reader's hands at the article, and the place left is on the trail, so Back
+  ("↩ Back", Backspace, B/Y, the browser's Back, a TV's Back) brings the book back at its page.
+  No walk: he does not lead the way to a link.
+- **In the card.** "What does this page mention?", "What is mentioned here?" and the like
+  (`parseQuestion(...).here`) are answered with where to ask it (`HERE_HOW`), searched for
+  nowhere and never sent to the model.
+- **TV.** Menu lands on the book's first button; ↓ goes along the foot's row to "Mentioned
+  here" (in the text view, along its toolbar); OK opens the list, ↓ goes through its finds, OK
+  takes one; Back closes the list (walking again). With his button the foot's row wraps to a
+  second on a 960 px screen, so the hint stands above both rows and his list above the hint.
+- **The help** names it in the librarian's row on a desktop, a touch screen and a TV.
+- **Costs** (2026-11-11, on the development PC, the demo set's 7 ZIMs): the first asking got
+  110,281 titles of 6 libraries in 1.1 s from a server (142 volumes) and 1.2 s from a static
+  build served on the same machine (3 lists, and the three ZIM files' volumes through the
+  worker), the heap growing from 15 to 29 MB; asked again it answered at once, the looking
+  itself taking 3–5 ms. Nothing is drawn for it in the 3D view, and each frame it compares two
+  values.
+- **Tests.** `test/client-librarian-here.test.js` covers the titles kept small; the shelf (a
+  library's titles got volume by volume or from a list, once, all wanted at once, each title's
+  article, failures said and asked for again, what it can hold, letting go); the pages' parts;
+  the text round blocks; the mentions on pages (their order and words, company on the page
+  before, sources left alone); his answer (the first library, one, none, a single page, the
+  book's own library, the first five, what he could not look in and why); the question in the
+  card; a mention's lines; and a mention taken to as a link, or opened as any article with no
+  book open. The button and its list are checked in a browser:
+
+  Checked in headless Chrome (2026-11-11) on a server of this checkout's over the demo set, and
+  the desktop case on a static build served locally:
+  - On a desktop, with "Alcoholism" of Wikipedia 100 open, L listed "These pages name 4 articles
+    of other libraries.": World Health Organization, Immune system, Wernicke–Korsakoff syndrome
+    and Immune response, all WikiMed's, the first with the focus. Esc closed it and left the
+    book open; the button opened it again at once; a turned page closed it. On the next pages
+    (Alcoholics Anonymous, Alcohol dependence, Binge drinking) the first was taken: WikiMed's
+    volume 4 came into hand at that article, Back was offered, and Backspace brought
+    "Alcoholism" back at the same pages. In Sapir's *Language*, at the page that names them:
+    Adam's apple, Soft palate and Hard palate. "What does this page mention?" typed in the card
+    got where to ask it.
+  - In the text view the button was in its toolbar and the list over the text; Esc closed the
+    list and left the text view open; a find taken showed "World Health Organization" in the
+    text view, and its Back brought "Alcoholism" back. With the text view closed the button was
+    in the foot's bar again.
+  - On a phone (375 × 812, one page) a tap listed "This page names one article of another
+    library."; nothing was wider than the screen, and a tap on the page closed the list.
+  - On a TV (`?tv=emulate`, 960 × 540): Menu, ↓ eight times to the button, OK: the list, its
+    first find focused; ↓ through the finds; Back closed it; OK on a find took it, and Back came
+    back to the page. The hint stood clear above the foot's two rows. The same in the text view,
+    along its toolbar.
+  - axe with the list open: nothing on a desktop, in the text view, on a phone or on a TV.

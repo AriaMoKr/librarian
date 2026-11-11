@@ -35,7 +35,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { Library } from '../server/library.js';
 import {
-  asWritten, contextOf, isName, keyOf, matchesIn, MAX_WORDS, mayBeMention, nearestOf, piecesOf, plain, stands, Titles, tokensOf,
+  asWritten, contextOf, entryTokens, isName, keyOf, matchesIn, MAX_WORDS, mayBeMention, nearestOf, piecesOf, plain, stands, Titles,
+  tokensOf,
 } from '../public/js/librarian/xref.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -78,8 +79,9 @@ for (let waited = 0; ; waited++) {
   await new Promise((r) => setTimeout(r, 1000));
 }
 
-// Every article's title, of every Wikipedia (its volumes' contents).
-const titles = new Titles();
+// Every article's title, of every Wikipedia (its volumes' contents); those of one word too, which
+// no match is ever (leftOut reads them).
+const titles = new Titles({ single: true });
 const articles = new Map(); // lib id -> [{ book, n, title }]
 const lists = [];
 for (const lib of libs) {
@@ -134,15 +136,15 @@ function leftOut(blocks, own) {
     const t = tokensOf(s);
     for (let i = 0; i < t.words.length; i++) {
       for (let n = Math.min(MAX_WORDS, t.words.length - i); n >= 2; n--) {
-        const all = titles.get(keyOf(t.words.slice(i, i + n)))?.filter((e) => e.tokens.words.length === n);
+        const all = titles.get(keyOf(t.words.slice(i, i + n)))?.filter((e) => entryTokens(e).words.length === n);
         if (!all?.length) continue;
         if (all.some((e) => e.lib === own)) break;
-        if (!(mayBeMention(t.words, i, n) && all.some((e) => asWritten(t, i, n, e.tokens)))) add('loose', s, t, i, n, all[0]);
+        if (!(mayBeMention(t.words, i, n) && all.some((e) => asWritten(t, i, n, entryTokens(e))))) add('loose', s, t, i, n, all[0]);
         break;
       }
       const w = t.words[i];
       if (w.length >= 4 && capital(w) && w !== w.toUpperCase() && isName(t, i, 1) && !capital(t.words[i - 1]) && !capital(t.words[i + 1])) {
-        const all = titles.get(w.toLowerCase())?.filter((e) => e.tokens.words.length === 1);
+        const all = titles.get(w.toLowerCase())?.filter((e) => entryTokens(e).words.length === 1);
         if (all?.length && !all.some((e) => e.lib === own)) add('single', s, t, i, 1, all[0]);
       }
     }

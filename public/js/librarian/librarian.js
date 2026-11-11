@@ -19,17 +19,28 @@
 //   while he reads on; his reading's answer replaces it. Nothing he read says it, or the model
 //   failed: that answer stays, with why. The model is warmed up as the question box takes the
 //   focus and as his panel opens.
+// - "Mentioned here" (experiment 3): beside the open book, his button (and L) lists the articles
+//   of other libraries that the open pages name (here.js, by xref.js's rule), each a Take me
+//   there: the article comes into the reader's hands as a link's page does, and Back brings the
+//   book back. The other libraries' titles are got once, when first asked (titles.js): a static
+//   site's list of them, else their volumes' contents.
 // Experiment 1: step 1, the words in the card; step 2, the figure and his panel; step 3, the walk;
 // step 4, his voice. Experiment 2: step 2, his reading in the card; step 3, on his panel and aloud.
+// Experiment 3: step 2, "Mentioned here" on a screen.
 
 import { findText, getBookMeta, getChunk } from '../api.js';
+import * as local from '../local/local.js';
 import { bookIndex, findArticles, findInText } from '../search.js';
+import { fileName } from '../util/file-names.js';
 import { load, save } from '../util/storage.js';
 import { ask, MAX_FINDS, parseQuestion } from './ask.js';
 import { FAILED, LibrarianCard } from './card.js';
 import { Desk } from './desk.js';
+import { HerePanel } from './here-panel.js';
+import { lookHere, partsOf } from './here.js';
 import { ServerModel } from './model.js';
 import { answerOf, couldNotRead, readFor, warmTurn } from './read.js';
+import { TitleShelf } from './titles.js';
 import { FIRST_STEP, LibraryTools, stepText } from './tools.js';
 import { Voice } from './voice.js';
 
@@ -37,20 +48,35 @@ import { Voice } from './voice.js';
 const KEY = 'librarian';
 /** What he says as his voice is chosen, so it is heard at once. */
 const VOICE_ON = 'I will say my answers aloud.';
+/** The site's root, from this module's own address (js/librarian/librarian.js), as api.js finds it. */
+const SITE = new URL('../../', import.meta.url);
 
 /**
  * Takes the visitor to a find, as the search's results do: a book to its shelf and into their
  * hands (interaction.searchPick), an article's volume open at it (openArticle), a book open where
- * its text holds the words (openText); a place he read, its book open there (openAt).
- * @param {{ searchPick: Function, openArticle: Function, openText: Function, openAt: Function }} interaction
+ * its text holds the words (openText); a place he read, its book open there (openAt). An article
+ * the open pages name (its `mention`) is followed as a link of theirs is (followTo): Back brings
+ * the book back at its page.
+ * @param {{ state?: string, searchPick: Function, openArticle: Function, openText: Function, openAt: Function, followTo?: Function }} interaction
  * @param {import('./ask.js').Find} find
  */
 export function takeThere(interaction, find) {
   if (find.kind === 'book') return interaction.searchPick(find.book, { take: true });
-  if (find.kind === 'article') return interaction.openArticle(find.lib.id, find.article.book, find.article.n);
+  if (find.kind === 'article') {
+    if (find.mention && interaction.state === 'read' && interaction.followTo) {
+      return interaction.followTo({ libId: find.lib.id, id: find.article.book, at: { c: find.article.n, b: 0 } });
+    }
+    return interaction.openArticle(find.lib.id, find.article.book, find.article.n);
+  }
   if (find.kind === 'passage') return interaction.openAt(find.lib.id, find.bookId, find.at);
   return interaction.openText(find.lib.id, find.hit);
 }
+
+/**
+ * Whether a key goes to a field (a box, a choice), whose keys are its own.
+ * @param {any} t the key's target
+ */
+const inField = (t) => !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 /**
  * Whether a key goes to a field, or to something that keeps its own keys (the text view).
@@ -109,8 +135,10 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
         console.warn('[librarian] ask', err);
         return { text: FAILED, finds: [], search: null };
       });
-      // A greeting, or nothing asked yet: what to ask him, without the model.
-      if (!model || !reads() || parseQuestion(text).empty) return plain;
+      // A greeting, or nothing asked yet: what to ask him, without the model. What the open pages
+      // mention is his to tell beside the book, not the model's.
+      const asked = parseQuestion(text);
+      if (!model || !reads() || asked.empty || asked.here) return plain;
       const tools = new LibraryTools(access);
       onStep(FIRST_STEP);
       // Shown at once while he reads on, when it found something (card.js: his reading's answer
@@ -184,8 +212,65 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   };
   // His panel opening warms up his reading's model, as the card's box taking the focus does (below).
   const desk = new Desk({ interaction, card, take, multi, intoBox, onWalk, speech, onOpen: () => warmUp() });
+
+  // "Mentioned here" (experiment 3), beside the open book. The other libraries' titles, got when
+  // first asked: a static site keeps each Wikipedia's as one list (the search's own, api.js);
+  // elsewhere a volume's contents are its articles' titles (the server's, or for a library opened
+  // here the worker's).
+  /** @param {string} path a file or a route of the site (SPEC §4) */
+  const fetchJSON = async (path) => {
+    const res = await fetch(new URL(path, SITE));
+    if (!res.ok) throw new Error(`${res.status} ${path}`);
+    return res.json();
+  };
+  const enc = encodeURIComponent;
+  const shelf = new TitleShelf({
+    list: async (lib) => (interaction.staticSite && !local.isLocal(lib.id) ? fetchJSON(`api/library/${enc(fileName(lib.id))}/titles.json`) : null),
+    volumes: (lib) => catalogue().booksByLib[lib.id] ?? [],
+    volume: async (lib, id) => {
+      const meta = local.isLocal(lib.id) ? await local.meta(lib.id, id) : await fetchJSON(`api/libraries/${enc(lib.id)}/books/${enc(id)}`);
+      return (meta.toc ?? []).map((/** @type {{ title?: string }} */ e) => String(e.title ?? ''));
+    },
+  });
+  const here = new HerePanel({
+    look: ({ onStep }) => {
+      const { libraries } = catalogue();
+      shelf.keep(libraries);
+      const { book, reader } = interaction;
+      const spread = interaction.spreadShown;
+      if (!book || !reader || !spread) return Promise.resolve({ text: 'No book is open.', finds: [], search: null });
+      return lookHere({
+        book: { libId: book.libId, id: book.id }, ...partsOf(spread, reader), blocksOf: (c) => getChunk(book.libId, book.id, c), libraries, shelf, onStep,
+      });
+    },
+    pages: () => interaction.spreadShown ?? null,
+    take, // no walk: the article comes into the reader's hands, as a link's page does
+    tv,
+  });
+  // The button where the book is read: in the bar at the page's foot, after "Text view", or in the
+  // text view's toolbar while that is open (the foot's bar is under it), the list over that view.
+  const foot = overlay.root.querySelector('.ov-bottom');
+  const placeHere = (/** @type {boolean} */ inText) => {
+    const view = inText ? interaction.textView?.el : null;
+    const bar = view?.querySelector('.tv-bar');
+    if (view && bar) here.place(bar, view, bar.querySelector('.tv-putback'));
+    else if (foot) here.place(foot, overlay.root, foot.querySelector('.ov-vr'));
+  };
+  let inText = false;
+  placeHere(false);
+  // Each frame (nothing made): the button follows the text view, and the list closes as the pages
+  // it was asked of go (a turned page, a link followed, the book put back).
+  interaction.onFrame?.(() => {
+    const text = !!interaction.textView?.isOpen;
+    if (text !== inText) {
+      inText = text;
+      placeHere(text);
+    }
+    here.sync();
+  });
+
   // For the console and scripted checks: __vrlbry.interaction.librarian.
-  interaction.librarian = { card, desk, voice, model };
+  interaction.librarian = { card, desk, voice, model, here, shelf };
   // Out of VR his panel goes: on a screen the card is his.
   interaction.renderer?.xr?.addEventListener?.('sessionend', () => desk.close());
 
@@ -198,6 +283,7 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   const show = (/** @type {boolean} */ on) => {
     card.setShown(on);
     desk.setShown(on);
+    here.setShown(on);
   };
   box.checked = prefs.shown !== false;
   box.onchange = () => {
@@ -286,7 +372,16 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   // taken.
   document.addEventListener('keydown', (e) => {
     if (e.code !== 'KeyL' || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
-    if (!card.shown || typing(e.target) || overlay.dialog?.()) return;
+    if (!card.shown || overlay.dialog?.()) return;
+    // Beside an open book (in the text view too, whose keys are otherwise its own): what its pages
+    // mention, or that list closed.
+    if (interaction.state === 'read') {
+      if (inField(e.target) || interaction.controls?.presenting) return;
+      e.preventDefault();
+      here.toggle();
+      return;
+    }
+    if (typing(e.target)) return;
     if (!['browse', 'inspect'].includes(interaction.state)) return;
     if (interaction.textView?.isOpen || interaction.controls?.presenting || interaction.controls?.textEntry) return;
     e.preventDefault();
@@ -305,10 +400,12 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   // The question, its answer and his panel in the page's state: debug reports and scenes
   // (overlay.uiState). The panel comes back only in a headset.
   overlay.addUiPart?.('librarian', {
-    state: () => ({ ...card.uiState(), ...desk.uiState() }),
+    state: () => ({ ...card.uiState(), ...desk.uiState(), ...(here.open ? { here: true } : {}) }),
     restore: (/** @type {any} */ ui) => {
       card.restoreUi(ui);
       if (ui?.panel && interaction.controls?.presenting) desk.open();
+      // "Mentioned here", where its book is open again already.
+      if (ui?.here && interaction.spreadShown) here.ask();
     },
   });
   return { card, desk };

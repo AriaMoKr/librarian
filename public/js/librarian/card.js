@@ -97,7 +97,7 @@ export function findList(doc, finds, { multi, numbered = false, take }) {
  * URL, let go of once loaded), as the search's results do.
  * @param {HTMLElement} root
  */
-function fillImages(root) {
+export function fillImages(root) {
   for (const img of /** @type {NodeListOf<HTMLImageElement>} */ (root.querySelectorAll('img[data-src]'))) {
     const url = img.dataset.src ?? '';
     img.removeAttribute('data-src');

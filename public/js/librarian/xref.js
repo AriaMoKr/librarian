@@ -70,8 +70,8 @@ const RAISED = 8 | 16;
  * @typedef {object} Entry an article's title, of a library
  * @property {string} lib the library's id
  * @property {string} title
- * @property {Tokens} tokens
  * @property {any} [ref] what its keeper needs to open it (a volume and a chunk)
+ * @property {Tokens} [tokens] its words, once a text has had them (entryTokens)
  */
 
 /**
@@ -184,29 +184,49 @@ export function asWritten(t, i, n, e) {
   return a.slice(la.length) === b.slice(lb.length) && la.toLowerCase() === lb.toLowerCase();
 }
 
-/** The titles of the libraries' articles, kept by their words (keyOf). */
+/**
+ * A title's words and the marks between them, taken when a text first has its words (most titles
+ * are never met: a library's tens of thousands are kept as they are).
+ * @param {Entry} entry
+ * @returns {Tokens}
+ */
+export const entryTokens = (entry) => (entry.tokens ??= tokensOf(entry.title));
+
+/**
+ * The titles of the libraries' articles, kept by their words (keyOf). Kept small, a page holding
+ * a hundred thousand of them: a title, its library and its ref, nothing more until it is met.
+ */
 export class Titles {
-  constructor() {
-    /** @type {Map<string, Entry[]>} */
+  /**
+   * @param {{ single?: boolean }} [options] single: titles of one word are kept too (to count what
+   *   the rule leaves out: tools/librarian-xref.mjs; no match is ever one)
+   */
+  constructor({ single = false } = {}) {
+    /** @type {Map<string, Entry | Entry[]>} a key's title, or its titles */
     this.byKey = new Map();
     /** How many titles it holds. */
     this.count = 0;
+    this.single = single;
   }
 
   /**
-   * Adds an article's title; false for one that is no words, or more than MAX_WORDS of them.
+   * Adds an article's title; false for one that is not kept: no words, more than MAX_WORDS of
+   * them, or one word (unless `single`).
    * @param {string} lib the library's id
    * @param {string} title
    * @param {any} [ref] what the keeper needs to open the article
    */
   add(lib, title, ref) {
-    const tokens = tokensOf(title);
-    const n = tokens.words.length;
-    if (!n || n > MAX_WORDS) return false;
-    const key = keyOf(tokens.words);
-    let list = this.byKey.get(key);
-    if (!list) this.byKey.set(key, list = []);
-    list.push({ lib, title: String(title), tokens, ...(ref !== undefined ? { ref } : {}) });
+    const { words } = tokensOf(title);
+    const n = words.length;
+    if (!n || n > MAX_WORDS || (n === 1 && !this.single)) return false;
+    const key = keyOf(words);
+    /** @type {Entry} */
+    const entry = ref === undefined ? { lib, title: String(title) } : { lib, title: String(title), ref };
+    const had = this.byKey.get(key);
+    if (had === undefined) this.byKey.set(key, entry);
+    else if (Array.isArray(had)) had.push(entry);
+    else this.byKey.set(key, [had, entry]);
     this.count++;
     return true;
   }
@@ -217,7 +237,9 @@ export class Titles {
    * @returns {Entry[] | undefined}
    */
   get(key) {
-    return this.byKey.get(key);
+    const had = this.byKey.get(key);
+    if (had === undefined) return undefined;
+    return Array.isArray(had) ? had : [had];
   }
 }
 
@@ -259,6 +281,42 @@ export function piecesOf(blocks) {
     if (/[\p{L}\p{N}]/u.test(text)) out.push({ block: b, text });
   }
   return out;
+}
+
+/**
+ * The blocks round some of a part's, enough to tell which matches there stand: those from `first`
+ * to `last` and their neighbours, until `margin` characters of text come before and after them (or
+ * the part ends). Where they begin under a heading of sources, one leads them, so what is no
+ * running text stays none.
+ * @param {any[]} blocks a part's
+ * @param {number} first
+ * @param {number} last
+ * @param {number} margin characters of text each way (0: those blocks alone)
+ * @returns {{ blocks: any[], start: number, lead: number }} blocks[i] is the part's block
+ *   i - lead + start
+ */
+export function windowOf(blocks, first, last, margin) {
+  if (!blocks.length) return { blocks: [], start: 0, lead: 0 };
+  const chars = (/** @type {any} */ block) => {
+    let n = 0;
+    if (Array.isArray(block?.r)) for (const run of block.r) if (typeof run?.[0] === 'string') n += run[0].length;
+    return n;
+  };
+  let start = Math.max(0, Math.min(first, blocks.length - 1));
+  let end = Math.max(start, Math.min(last, blocks.length - 1));
+  for (let n = 0; start > 0 && n < margin;) n += chars(blocks[--start]);
+  for (let n = 0; end < blocks.length - 1 && n < margin;) n += chars(blocks[++end]);
+  let sources = 0; // under a heading of sources as they begin: its level
+  for (let b = 0; b < start; b++) {
+    const block = blocks[b];
+    if (block?.t !== 'h') continue;
+    const level = block.l ?? 1;
+    if (sources && level <= sources) sources = 0;
+    if (!sources && SOURCES.has(headingOf(block.r ?? []))) sources = level;
+  }
+  const out = blocks.slice(start, end + 1);
+  if (sources) out.unshift({ t: 'h', l: sources, r: [['References', 0]] });
+  return { blocks: out, start, lead: sources ? 1 : 0 };
 }
 
 /**
@@ -324,7 +382,7 @@ export function matchesIn(blocks, titles, { own = null } = {}) {
       const joined = low.slice(i, i + most).join(' ');
       let end = joined.length;
       for (let n = most; n >= 2; end -= low[i + n - 1].length + 1, n--) {
-        const entries = titles.get(joined.slice(0, end))?.filter((e) => asWritten(t, i, n, e.tokens));
+        const entries = titles.get(joined.slice(0, end))?.filter((e) => asWritten(t, i, n, entryTokens(e)));
         if (!entries?.length) continue;
         // Its own library has it: no link between libraries, and nothing inside it is one.
         if (own !== null && entries.some((e) => e.lib === own)) {
