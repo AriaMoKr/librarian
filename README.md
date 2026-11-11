@@ -41,6 +41,13 @@ say is struck before you see it; with nothing left he says "I found nothing that
 his panel shows the same, and with his voice chosen he says the answer he ends with. The website
 has no model, so there he answers as in the first.
 
+The third has its first step, with nothing to see yet: the rule by which he will tell what a page
+names that another library has an article on. The words must be the article's title as written,
+two words or more, and the page must show which sense it means, by writing them as a name or by
+naming another article of the same library within a few lines: "large numbers of bats" is not
+mathematics' *Large numbers*. Read by hand over the website's libraries, what the rule offers was
+the right article 190 times in 196.
+
 The librarian will always be optional (the help's *Show the librarian* turns it off): the library
 works as it does without it, the page reports nothing about its visitors, and a question goes to a
 model only when you ask one, having chosen to.

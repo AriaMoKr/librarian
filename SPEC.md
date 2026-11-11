@@ -1220,6 +1220,7 @@ public/
     librarian/tools.js   LibraryTools: the library as a model's tools (search, read, find), all it showed kept by id (pure but for the library).
     librarian/read.js    readFor: a model reads for a question through the tools, turn by turn; finish: its answer held to the rule (pure).
     librarian/cite.js    the citation rule: checkAnswer keeps the sentences that what they cite says (pure).
+    librarian/xref.js    links between libraries: the words of a text that are another library's article (matchesIn, mentionsIn), an author's names and a book's titles as articles (pure; not on the page yet).
     librarian/model.js   ServerModel: the server's model as the page reaches it (§4): which one, a turn, the warm-up.
     librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choices, his reading.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
@@ -2367,7 +2368,9 @@ step 1 (2026-11-07): his reading with a model of Ollama's, its citation rule and
 to Ollama, measured over 24 questions; its step 2 (2026-11-07): his reading in the card, where the
 server has a model and it is chosen; and its step 3 (2026-11-07): the library's own answer first
 while he reads on, his reading on his panel in VR, and his voice saying the answer he ends with
-(Answers with citations, below).
+(Answers with citations, below). Experiment 3's step 1 (2026-11-11): the rule for links between
+libraries and its measure over the demo set (Links between libraries, below); nothing of it is on
+the page yet.
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
   the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks, reads }` (kept whole)
@@ -2914,3 +2917,139 @@ page, below).
     walked, and the volume opened with the passage's block on the left-hand page.
   - axe while he read and with his answer: nothing on a desktop, a phone or a TV. The server
     logged nothing.
+
+#### Links between libraries (experiment 3)
+
+While a book or an article is read, he is to offer what the other libraries have on it
+(docs/LIBRARIAN.md). Step 1 (2026-11-11) is the rule and its measure: `librarian/xref.js` and
+`tools/librarian-xref.mjs`. The page does not use them yet; steps 2 to 4 will ("Mentioned here"
+while reading, "Also in the library" for the book in hand, in VR and aloud).
+
+- **Why words.** Counted over the demo set: no author or title of its 19 Gutenberg books (class
+  P, the study of language) is an article of its Wikipedias, and every link kept in an article
+  leads within its own file (2,265 followed, all of them: mwoffliner drops a link to an article
+  outside its selection and keeps the words). So a link from one library to another has to come
+  from the words themselves.
+- **A match** (`matchesIn(blocks, titles, { own })`, pure): words in a row that are the title of
+  an article of another library,
+  - as written (`asWritten`): the same words in the same order with the same marks between them,
+    the first letter's case aside. A text is taken as its words and what stands between them
+    (`tokensOf`: `words`, `gaps`, `at`), its hyphens and dashes within a word, its quotes and its
+    spaces made one kind each first (`plain`). "probability density function" is *Probability
+    density function*; "Nova" is not *NOvA*, "early stage" not *Early Stage*, "a group" not
+    *A-group*, "heart, muscle" not *Heart muscle*;
+  - of two words or more, at most 8 (`MAX_WORDS`), two of them not little words and the last not
+    one (`mayBeMention`). The little words (`LITTLE`) are English's articles, prepositions,
+    conjunctions, pronouns, auxiliaries and the like, not words that begin names ("up quark",
+    "New York"); a capital letter alone after the first word is a letter's name ("Vitamin A",
+    "World War I"). So not "up to", "a value", "almost all", nor "The Tradition", one word in all
+    but name;
+  - not an article of the text's own library (`own`: its own links lead there), nor inside a
+    longer run that is one; of the runs from a word, the longest that may be a mention counts
+    ("COVID-19 pandemic in California", not "COVID-19 pandemic");
+  - in running text (`piecesOf`): a paragraph or a list item, parted at a link (linked already),
+    a picture in the line, raised or lowered text (a reference's number) and a line's end. Nothing
+    of a heading, a table (an infobox's "Molar mass"), a caption, preformatted text, or what
+    stands under a heading of sources (References, Notes, Citations, Footnotes, Sources,
+    Bibliography, Further reading, External links, Works cited and the like) down to the next
+    heading of its level.
+
+  Each is given once (`Mention`): `text` (as the text first has it), `key` (its words in lower
+  case), `entries` (the article of each library that has one), `block` and `context` (where it
+  first stands, and the words round it there), `count`, `at` and `blocks` (each place: the
+  characters of running text before it, and its block), `name`, `near`.
+- **A mention** (`mentionsIn`): a match that stands (`stands`), since the same words can be two
+  things. It stands when
+  - the text writes it as a name (`isName`): with a capital past a word's first letter ("COVID-19
+    vaccine", "mRNA"), or one beginning a word that begins no sentence ("Isaac Newton", "the
+    Manhattan Project", "by Caesarean section"); or
+  - another match of an article of the same library stands within 300 characters of running text
+    (`NEAR`; `nearestOf` gives each match its `near`, null with none): "atrial fibrillation"
+    beside "high blood pressure", both WikiMed's.
+
+  Held back, for one: "Large numbers of bats" (mathematics' *Large numbers*) and a fungus's
+  "nuclear fusion" (physics'), each alone. What stands near the ends of the blocks given may lack
+  its company: a page's mentions are taken from the text round it. A single word is never a match.
+- **The titles** (`Titles`): `add(lib, title, ref)` keeps a title of up to 8 words by its key
+  (`keyOf`: its words in lower case, one space apart), with what its keeper needs to open the
+  article (`ref`); `get(key)` gives the entries of a key. `matchesIn` takes anything with that
+  `get`.
+- **An author and a title as articles** (for step 3; an article found must still say it is
+  theirs):
+  - `authorNames(author)`: the names an author may have an article under, the fullest first.
+    Project Gutenberg's "F. Max (Friedrich Max) Müller" gives "Friedrich Max Müller" (the names in
+    brackets for those before them), "F. Max Müller" and, without initials, "Max Müller". "Twain,
+    Mark" is turned round, years after a name and a "Sir" before it go, "Saki (H. H. Munro)" gives
+    both names, and "Anonymous" or "Various" none. `surnameOf` is the last name's last word.
+  - `titleForms(book)`: the titles a book may have an article under, the likeliest first: its
+    title without a subtitle, an other title ("; or, The Whale") or a volume's number after a mark
+    (", Volume 1 (of 2)"), then as Wikipedia tells works of one name apart ("Language (novel)",
+    "Language (Sapir novel)", "(book)", "(Sapir book)", "(play)", "(poem)"), then the title in
+    full.
+- **The count** (`tools/librarian-xref.mjs [--dir <folder>]… [--sample 150] [--books 20]`):
+  over folders of ZIMs (without `--dir`, the demo set in `.demo/render` and `.demo/files`), read
+  as the server reads them (`server/library.js`, in the tool's process; nothing is sent
+  anywhere). Every Wikipedia's titles go into one `Titles` (its volumes' contents). It reads a
+  Wikipedia's articles, `--sample` of them evenly spread, and another library's first `--books`
+  books whole, and prints per library the matches, the mentions among them and how they are
+  spread (a text's median and 9th decile, the texts with none), and the runs of words that may be
+  a mention per 3,000 characters: what a reader without the titles at hand would have to look
+  up. Then each Wikipedia's titles of two words or more as a list (bytes, and gzipped), and the
+  rule held to the matches read by hand (below): of the mentions found again, the share that
+  were right. It fails under 95 %. `--label <n>` writes n mentions not read yet, evenly spread,
+  to judge and add to the list, with half as many each of the matches that do not stand, single
+  words written as names and loose matches (a title's words in another case, with other marks
+  between them, or little words only); `--out <file>` keeps every match with the words round it.
+- **Measured** (2026-11-11, over the demo set's 7 ZIMs):
+
+  | library | read | characters | matches | mentions | a text's median | 9th decile | texts with none | runs per 3,000 characters |
+  |---|--:|--:|--:|--:|--:|--:|--:|--:|
+  | gutenberg_en_lcc-p | 19 books | 9.2 M | 193 | 52 | 2 | 8 | 4 | 1,336 |
+  | wikipedia_en_100 | 100 articles | 5.4 M | 1,487 | 959 | 4 | 25 | 19 | 1,484 |
+  | wikipedia_en_chemistry_mini | 150 articles | 137 k | 145 | 75 | 0 | 2 | 118 | 1,270 |
+  | wikipedia_en_medicine_mini | 150 articles | 103 k | 18 | 12 | 0 | 0 | 144 | 1,248 |
+  | wikipedia_en_golf_maxi | 150 articles | 304 k | 24 | 16 | 0 | 1 | 134 | 1,321 |
+  | wikipedia_en_mathematics_mini | 150 articles | 96 k | 17 | 7 | 0 | 0 | 145 | 1,057 |
+  | wikipedia_en_physics_mini | 150 articles | 116 k | 64 | 34 | 0 | 1 | 135 | 1,284 |
+
+  So the 100's long articles name the other libraries' articles often (WikiMed's most), the
+  topics' short introductions seldom, and a book of the 19 a few times in all. A reader without
+  the titles at hand would have some 1,300 runs to look up for two pages, far too many where a
+  lookup is a read of a file or a round trip. The titles of two words or more as a list are
+  small: 158 kB for Chemistry's 6,811 (54 kB gzipped), 1.2 MB for WikiMed's 49,641 (414 kB),
+  251 kB for Golf's (76 kB), 470 kB for Mathematics' (158 kB), 413 kB for Physics' (156 kB), 1 kB
+  for the 100's 53. Step 2 keeps a library's titles at hand, got once, and looks nothing up.
+- **Read by hand** (`tools/librarian-xref-checked.json`): 517 matches of that run, each with its
+  sentence, read to say whether the article is what the words mean where they stand (`right`;
+  `why` where a match is not). The matches carry `name` and `near`, which decide whether they
+  stand.
+
+  | read | right | of | |
+  |---|--:|--:|--:|
+  | mentions | 190 | 196 | 96.9 % |
+  | matches that do not stand | 89 | 114 | 78.1 % |
+  | single words written as names (never matched) | 46 | 97 | 47.4 % |
+  | loose matches (never matched) | 25 | 110 | 22.7 % |
+
+  They were read in two batches. The first (150 matches, 133 right, 88.7 %) showed what a match
+  alone gets wrong: one sense of the same words for another, mostly an everyday phrase for a term
+  of art ("large numbers of eggs", "an integral element of speech", "a critical mass of the heart
+  muscle") or one field's term for another's (a fungus's "nuclear fusion", a simulation's "grid
+  cell"). Two signs were then measured on it. Words shared between the match's paragraph and the
+  article's opening told little (92.7 % right at best). Company did: with the names, the matches
+  with another of their library within 300 characters were right 87 times of 89, and the wrong
+  matches' nearest company stood 378 characters off or more, bar one at 145. The second batch was
+  read after the rule was settled so: 103 of its 107 mentions were right (96.3 %).
+
+  The six wrong mentions: one sense for another all the same, as a name or in company ("a more
+  scientific method than", a frog's "single ventricle" for a defect of the human heart, tennis's
+  "Grand Slam" for golf's, "broken heart syndrome" for heartbreak), and two articles that only
+  list what their words may refer to ("Drug use", "Time scale").
+- **Tests.** `test/client-librarian-xref.test.js` covers a text as its words (`plain`,
+  `tokensOf`, `asWritten`, `mayBeMention`); the running text of blocks, and what stands under
+  sources left out; the matches (as written, what merely resembles a title, running text only,
+  the text's own library, the longest run, each once with its places); a match that stands (a
+  name by its capitals, `nearestOf`, `stands`, the mentions); the titles kept; an author's names,
+  a surname and a book's titles; and the list read by hand: each of its matches found again in
+  its sentence, none of the single words and loose matches, the mentions among them right 19
+  times in 20 (at least 150 read), and what is held back right less often.

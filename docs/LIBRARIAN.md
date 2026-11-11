@@ -5,7 +5,8 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 (CLAUDE.md, "Branches and sites"). These are the proposals, cheapest first, each one something to
 try on its own.
 
-**Built so far** (SPEC §5.10): experiment 1, all four steps, and experiment 2's first three.
+**Built so far** (SPEC §5.10): experiment 1, all four steps, experiment 2's first three, and
+experiment 3's first.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -50,10 +51,18 @@ try on its own.
   he is doing, then his sentences with their sources' numbers and the sources as its list, each a
   *Take me there*. It is drawn again only when its words change, and opening it warms the model
   up. With his voice chosen he says the answer he ends with, without the numbers.
+- **Experiment 3, step 1: the rule for links between libraries.** Nothing to see yet: it is the
+  rule by which he will tell what a page names that another library has an article on, and its
+  measure. The words must be the article's title as written, two words or more and not little
+  words only, and the text must show which sense it means: it writes them as a name, or it names
+  another article of the same library within a few lines. `tools/librarian-xref.mjs` counts them
+  over the demo set and holds the rule to 517 matches read by hand. What the rule offers was the
+  right article 190 times of 196; what it holds back, 89 of 114; single words, which it never
+  offers, 46 of 97.
 
-Next: experiment 2's step 4, after a test of its own: whether the Pages site can talk to a
-visitor's own Ollama directly. Or experiment 3, cross-references between libraries. His reading
-in VR has been checked with the emulator only, not yet on a Quest itself.
+Next: experiment 3's step 2, "Mentioned here" while reading. Experiment 2's step 4 (whether the
+Pages site can talk to a visitor's own Ollama directly) waits on a test of its own, not run yet.
+His reading in VR has been checked with the emulator only, not yet on a Quest itself.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,
@@ -108,6 +117,28 @@ While you read *Moby-Dick* from Gutenberg, the librarian offers the Wikipedia ar
 his other works on Wikisource, and the articles a passage mentions. A first version can match
 titles and authors without any AI; the model from experiment 2 can add looser connections later.
 This makes the separate ZIMs feel like one library.
+
+- **What a count over the demo set showed** (2026-11-10). None of its 19 Gutenberg books has its
+  author or its title among its Wikipedias, which are the 100 most-read articles and five
+  topics. The links in its articles all lead within their own file: a link to an article outside
+  a file's selection was dropped when the file was made, and the words kept. So there a link
+  between libraries has to come from a page's words.
+- **The rule for words** (`librarian/xref.js`). Words that merely resemble a title are mostly
+  noise ("up to" for mathematics' *Up to*, "Nova" for *NOvA*), and single words are the right
+  article less than half the time ("Mass" in *Catholic Church* is not physics' *Mass*). The
+  title as written, in two words or more, is right about 9 times in 10; the rest is one sense of
+  the same words for another ("large numbers of bats", a fungus's "nuclear fusion"). So the text
+  must also show which sense it means, by writing the words as a name or by naming another
+  article of the same library within a few lines: 19 in 20 are then right, and about two in
+  five of the matches are held back.
+- **Steps**: 1. the rule and its measure (`tools/librarian-xref.mjs`, over matches read by hand);
+  2. "Mentioned here": asked while you read, he lists the articles of other libraries that the
+  open pages name, each a *Take me there* that brings the article into your hands, with Back
+  bringing your book back at your page; 3. "Also in the library", for the book in hand: its
+  author's article, its own, the same work in another library and the author's other books
+  (nothing in the demo set: it shows with bigger collections); 4. in VR and aloud.
+- **Later**: looser connections with experiment 2's model, which could also tell one sense from
+  another where the rule holds a match back.
 
 ### 4. Voice in VR
 
