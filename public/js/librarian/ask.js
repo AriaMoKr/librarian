@@ -449,6 +449,8 @@ export function answerText(found, libraries) {
 /**
  * @typedef {object} Answer
  * @property {string} text what the librarian says (as his voice says it: without numbers)
+ * @property {string} [said] what his voice says instead, where it says more than is shown (what
+ *   the open pages mention: the articles' names too, here.js)
  * @property {Find[]} finds what it found, at most MAX_FINDS, the best first; a reading's sources
  * @property {Search | null} search the search that found them (the first one tried when none did)
  * @property {Array<{ text: string, cites: number[] }>} [statements] a reading's sentences (read.js

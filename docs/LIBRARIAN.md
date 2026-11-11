@@ -6,7 +6,7 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 try on its own.
 
 **Built so far** (SPEC §5.10): experiment 1, all four steps, experiment 2's first three, and
-experiment 3's first two.
+experiment 3's steps 1, 2 and 4.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -66,11 +66,22 @@ experiment 3's first two.
   comes, and Back brings your book back at your page. The other libraries' titles are got the
   first time you ask (about a second for the demo set's 110,000, then kept), and nothing before.
   The library card is not there while a book is read, so the question typed in it gets where to
-  ask instead. It works with a keyboard, a touch screen and a TV's remote; VR is step 4.
+  ask instead. It works with a keyboard, a touch screen and a TV's remote.
+- **Experiment 3, step 4: in a headset and aloud.** In VR his button, *Mentioned here*, is at the
+  right end of the open book's toolbar, and his answer comes on a panel of his beside the pages
+  (the contents are on the other side): what he is doing, then his words and the articles, each
+  a *Take me there* by the trigger; B or Y brings your book back. A turned page closes it. With
+  his voice chosen he says the answer and names the articles, on a screen too. The titles are
+  now kept in a worker of their own, which gets them itself and reads the pages against them:
+  keeping WikiMed's 71,000 alone takes 131 ms on a desktop, far more than a frame in a headset
+  has, and the page's memory is spared their 14 MB. Two things are not as proposed: the list is
+  a panel of its own (his desk's closes as it opens), and the button to ask is one draw call for
+  each eye while a book is read in a headset.
 
 Next: experiment 3's step 3, "Also in the library" for the book in hand. Experiment 2's step 4
 (whether the Pages site can talk to a visitor's own Ollama directly) waits on a test of its own,
-not run yet. His reading in VR has been checked with the emulator only, not yet on a Quest itself.
+not run yet. His reading and "Mentioned here" in VR have been checked with the emulator only, not
+yet on a Quest itself.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,
@@ -144,7 +155,8 @@ This makes the separate ZIMs feel like one library.
   open pages name, each a *Take me there* that brings the article into your hands, with Back
   bringing your book back at your page (built, on a screen); 3. "Also in the library", for the book in hand: its
   author's article, its own, the same work in another library and the author's other books
-  (nothing in the demo set: it shows with bigger collections); 4. in VR and aloud.
+  (nothing in the demo set: it shows with bigger collections); 4. in VR and aloud (built: his
+  button by the book's toolbar, his panel beside the pages, his voice; the titles in a worker).
 - **Later**: looser connections with experiment 2's model, which could also tell one sense from
   another where the rule holds a match back.
 

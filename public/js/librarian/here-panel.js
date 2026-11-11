@@ -8,6 +8,10 @@
 // does the focus leaving it, a turned page or the book put back (librarian.js). On a TV the
 // remote reaches the button in the foot's row and steps through the finds; Back, walking again,
 // closes it.
+// It is also where the question is asked and answered whatever shows it (step 4): in a headset
+// his panel beside the book (here-vr.js) asks through it and follows it (onLooking, onStep,
+// onAnswer), as his desk's panel follows the card, so the two always say the same; and his voice
+// says the answer it ends with (librarian.js).
 
 import { fillImages, findList, FAILED } from './card.js';
 
@@ -23,12 +27,15 @@ export class HerePanel {
    * @param {() => unknown} [o.pages] what the open pages are now: another value once they change
    *   (the spread shown; null with no book open)
    * @param {boolean} [o.tv] a TV: closed, its button has the focus again
+   * @param {() => boolean} [o.presenting] whether the view is a headset's: the page is not seen
+   *   then, and where its focus is closes nothing
    */
-  constructor({ look, take, pages = () => null, tv = false }) {
+  constructor({ look, take, pages = () => null, tv = false, presenting = () => false }) {
     this._look = look;
     this._take = take;
     this._pages = pages;
     this.tv = tv;
+    this._presenting = presenting;
     /** The asking being answered (a newer one, or closing, wins). */
     this._token = 0;
     /** @type {ReturnType<typeof setTimeout> | undefined} */
@@ -39,6 +46,16 @@ export class HerePanel {
     this.answer = null;
     /** What the pages were when asked (sync closes the list as they change). @type {unknown} */
     this.asked = null;
+    /** Whether an answer is on its way. */
+    this.looking = false;
+    /** What he is doing meanwhile ('' for nothing to say of it). */
+    this.step = '';
+    /** Told as an asking begins (the list opens, or is asked again). @type {(() => void) | null} */
+    this.onLooking = null;
+    /** Told what he is doing meanwhile. @type {((step: string) => void) | null} */
+    this.onStep = null;
+    /** Told the answer as it comes, and null as the list closes. @type {((answer: import('./ask.js').Answer | null) => void) | null} */
+    this.onAnswer = null;
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -75,12 +92,23 @@ export class HerePanel {
       this.close({ back: true });
     });
     // The focus gone elsewhere (a click on the view, a TV's Back walking again): the list closes.
+    // Not in a headset, where the page is not what is seen or pointed at.
     panel.addEventListener('focusout', () => {
       setTimeout(() => {
         const a = document.activeElement;
-        if (this.open && !panel.contains(a) && a !== button) this.close();
+        if (this.open && !this._presenting() && !panel.contains(a) && a !== button) this.close();
       }, 0);
     });
+  }
+
+  /**
+   * Takes the reader to a find of the list, which closes (its buttons; in a headset his panel's
+   * rows).
+   * @param {import('./ask.js').Find} find
+   */
+  take(find) {
+    this.close();
+    return this._take(find);
   }
 
   /** Whether the list is open. */
@@ -125,6 +153,7 @@ export class HerePanel {
     const token = ++this._token;
     this.asked = pages;
     this.answer = null;
+    this.looking = true;
     clearTimeout(this._lookingTimer);
     this._say('');
     this._setStep('');
@@ -138,12 +167,15 @@ export class HerePanel {
     this._lookingTimer = setTimeout(() => {
       if (token === this._token) this._say('Looking…');
     }, LOOKING_AFTER);
+    this.onLooking?.();
     /** @type {import('./ask.js').Answer} */
     let answer;
     try {
       answer = await this._look({
         onStep: (step) => {
-          if (token === this._token) this._setStep(step);
+          if (token !== this._token) return;
+          this._setStep(step);
+          this.onStep?.(step);
         },
       });
     } catch (err) {
@@ -153,20 +185,16 @@ export class HerePanel {
     if (token !== this._token) return; // closed, or asked again
     clearTimeout(this._lookingTimer);
     this._setStep('');
+    this.looking = false;
     this.answer = answer;
-    const list = findList(document, answer.finds, {
-      multi: true,
-      take: (find) => {
-        this.close();
-        this._take(find);
-      },
-    });
+    const list = findList(document, answer.finds, { multi: true, take: (find) => this.take(find) });
     list.hidden = !answer.finds.length;
     this._list.replaceWith(list);
     fillImages(list);
     this._say(answer.text);
     // The first find takes the focus, where it is still in the list (the reader has not left it).
     if (this.panel.contains(document.activeElement)) list.querySelector('button')?.focus({ preventScroll: true });
+    this.onAnswer?.(answer);
   }
 
   /**
@@ -184,12 +212,15 @@ export class HerePanel {
     this.button.setAttribute('aria-expanded', 'false');
     this.answer = null;
     this.asked = null;
+    this.looking = false;
     this._answerEl.textContent = '';
     this._setStep('');
     this._list.replaceChildren();
-    if (!within) return;
-    if (back && this.tv) this.button.focus({ preventScroll: true });
-    else /** @type {HTMLElement | null} */ (document.activeElement)?.blur?.();
+    if (within) {
+      if (back && this.tv) this.button.focus({ preventScroll: true });
+      else /** @type {HTMLElement | null} */ (document.activeElement)?.blur?.();
+    }
+    this.onAnswer?.(null);
   }
 
   /**
@@ -202,6 +233,7 @@ export class HerePanel {
 
   /** What he is doing meanwhile ('' for nothing): seen, not said. @param {string} text */
   _setStep(text) {
+    this.step = text;
     this._stepEl.textContent = text;
     this._stepEl.hidden = !text;
   }

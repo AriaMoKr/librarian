@@ -1,15 +1,18 @@
-// "Mentioned here" (public/js/librarian/, SPEC §5.10; docs/LIBRARIAN.md, experiment 3 step 2): the
-// libraries' titles kept at hand (titles.js), the mentions on the open pages and his answer
-// (here.js), what the card says to the question typed there, a mention's lines, and a mention
-// taken to as a link is (librarian.js takeThere). The button and its list (here-panel.js) are
-// checked in a browser.
+// "Mentioned here" (public/js/librarian/, SPEC §5.10; docs/LIBRARIAN.md, experiment 3 steps 2 and
+// 4): the libraries' titles kept at hand (titles.js, in an engine: xref-engine.js, which
+// test/client-librarian-engine.test.js runs as a worker too), the mentions on the open pages and
+// his answer, with what his voice says (here.js), what the card says to the question typed there,
+// a mention's lines, and a mention taken to as a link is (librarian.js takeThere). The button and
+// its list (here-panel.js) are checked in a browser; his panel in a headset (here-vr.js) in
+// test/client-librarian-here-vr.test.js.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ask, findLines, HERE_HOW, MAX_FINDS, parseQuestion } from '../public/js/librarian/ask.js';
-import { lookHere, mentionsOn, partsOf } from '../public/js/librarian/here.js';
+import { lookHere, partsOf, roundOf } from '../public/js/librarian/here.js';
 import { MOST_ARTICLES, TitleShelf } from '../public/js/librarian/titles.js';
-import { entryTokens, NEAR, Titles, windowOf } from '../public/js/librarian/xref.js';
+import { XrefEngine } from '../public/js/librarian/xref-engine.js';
+import { entryTokens, mentionsOn, NEAR, Titles, windowOf } from '../public/js/librarian/xref.js';
 import './helpers/vendor.js'; // librarian.js → desk.js → the page's ../../vendor/common/panel.js
 
 const { takeThere } = await import('../public/js/librarian/librarian.js');
@@ -31,24 +34,39 @@ const ARTICLES = {
 };
 const volumesOf = (id) => Array.from({ length: Math.ceil(ARTICLES[id].length / 3) }, (_, k) => ({ id: `v${k + 1}` }));
 
-/** How the titles are got, counted: a site's list (static) or volume by volume. */
-function access({ list = false, fail = [] } = {}) {
-  const calls = { list: [], volume: [] };
+/**
+ * How the titles are got, counted: by address, a site's list (static: `list`) or a volume's
+ * contents, which the engine gets (`calls.got`); or volume by volume from the page itself
+ * (`given`: a library opened in the browser). `engine` starts the engine that gets them.
+ */
+function access({ list = false, given = false, fail = [] } = {}) {
+  const calls = { got: [], given: [] };
+  const volumeTitles = (lib, id) => {
+    const k = Number(id.slice(1)) - 1;
+    return ARTICLES[lib].slice(k * 3, k * 3 + 3);
+  };
+  const fetchJSON = async (url) => {
+    calls.got.push(url);
+    const [lib, what] = url.split('/');
+    if (fail.includes(lib)) throw new Error('no titles');
+    return what === 'titles.json' ? { volumeSize: 3, titles: ARTICLES[lib] } : { toc: volumeTitles(lib, what).map((title) => ({ title })) };
+  };
   return {
     calls,
-    list: async (lib) => {
-      calls.list.push(lib.id);
-      if (fail.includes(lib.id)) throw new Error('no titles');
-      return list ? { volumeSize: 3, titles: ARTICLES[lib.id] } : null;
-    },
+    engine: () => new XrefEngine({ fetchJSON }),
+    list: (lib) => (list ? `${lib.id}/titles.json` : null),
     volumes: (lib) => volumesOf(lib.id),
-    volume: async (lib, id) => {
-      calls.volume.push(`${lib.id}/${id}`);
-      const k = Number(id.slice(1)) - 1;
-      return ARTICLES[lib.id].slice(k * 3, k * 3 + 3);
+    volume: (lib, id) => {
+      if (!given) return `${lib.id}/${id}`;
+      calls.given.push(`${lib.id}/${id}`);
+      return fail.includes(lib.id) ? Promise.reject(new Error('no titles')) : Promise.resolve(volumeTitles(lib.id, id));
     },
   };
 }
+/** A shelf over that access, its engine in this thread. */
+const shelfOf = (a = access(), options = {}) => new TitleShelf(a, { engine: a.engine, ...options });
+/** Some blocks as pages with nothing round them. */
+const pagesOf = (...blocks) => [{ blocks, first: 0, last: blocks.length - 1 }];
 
 describe('the titles at hand', () => {
   it('keeps titles of two words or more, each alone until its words are met', () => {
@@ -70,26 +88,31 @@ describe('the titles at hand', () => {
 
   it('gets a library\'s titles volume by volume, once, and knows each one\'s article', async () => {
     const a = access();
-    const shelf = new TitleShelf(a);
+    const shelf = shelfOf(a);
     const getting = [];
     const at = await shelf.of([med, phys], { onGetting: (libs) => getting.push(libs.map((l) => l.id)) });
     assert.deepEqual(getting, [['med', 'phys']]); // told once, of both: they are got at once
-    assert.deepEqual(a.calls.volume, ['med/v1', 'med/v2', 'phys/v1', 'phys/v2']);
+    assert.deepEqual([...a.calls.got].sort(), ['med/v1', 'med/v2', 'phys/v1', 'phys/v2']);
     assert.equal(at.count, 9); // all but "Blood", one word
     assert.deepEqual(at.failed, []);
+    assert.deepEqual(at.libs, [med, phys]);
     // The first library given is the first offered.
-    const entries = at.get('heart failure');
-    assert.deepEqual(entries.map((e) => e.lib), ['med', 'phys']);
-    assert.deepEqual(at.articleOf(entries[0]), { lib: med, article: { title: 'Heart failure', book: 'v1', n: 2 } });
-    assert.deepEqual(at.articleOf(at.get('soft palate')[0]), { lib: med, article: { title: 'Soft palate', book: 'v2', n: 2 } });
-    assert.deepEqual(at.articleOf(at.get('solar eclipse')[0]), { lib: phys, article: { title: 'Solar eclipse', book: 'v2', n: 0 } });
-    assert.equal(at.get('nothing here'), undefined);
+    const words = 'Then heart failure and a soft palate, under a solar eclipse.';
+    const named = await shelf.mentions(at.libs, pagesOf(p(words)));
+    assert.deepEqual(named, [
+      { key: 'heart failure', text: 'heart failure', context: words, lib: med, article: { title: 'Heart failure', book: 'v1', n: 2 } },
+      { key: 'soft palate', text: 'soft palate', context: words, lib: med, article: { title: 'Soft palate', book: 'v2', n: 2 } },
+      { key: 'solar eclipse', text: 'solar eclipse', context: words, lib: phys, article: { title: 'Solar eclipse', book: 'v2', n: 0 } },
+    ]);
+    assert.deepEqual(await shelf.mentions(at.libs, pagesOf(p('Nothing here.'))), []);
+    assert.deepEqual(await shelf.mentions(at.libs, []), []);
     // Asked again: at hand, nothing got and nobody told to wait.
     assert.ok(shelf.has(med) && shelf.has(phys) && !shelf.has(top));
     const again = await shelf.of([phys], { onGetting: (libs) => getting.push(libs.map((l) => l.id)) });
-    assert.equal(a.calls.volume.length, 4);
+    assert.equal(a.calls.got.length, 4);
     assert.equal(getting.length, 1);
-    assert.deepEqual(again.get('heart failure').map((e) => e.lib), ['phys']);
+    const ofPhys = await shelf.mentions(again.libs, pagesOf(p('Then heart failure and nuclear fusion.')));
+    assert.deepEqual(ofPhys.map((m) => [m.lib.id, m.article.title]), [['phys', 'Heart failure'], ['phys', 'Nuclear fusion']]);
     // One more library wanted: only that one is waited for.
     await shelf.of([top, med], { onGetting: (libs) => getting.push(libs.map((l) => l.id)) });
     assert.deepEqual(getting[1], ['top']);
@@ -97,39 +120,75 @@ describe('the titles at hand', () => {
 
   it('takes a site\'s list of them where it keeps one', async () => {
     const a = access({ list: true });
-    const at = await new TitleShelf(a).of([med]);
-    assert.deepEqual(a.calls.volume, []);
-    assert.deepEqual(at.articleOf(at.get('isaac newton')[0]), { lib: med, article: { title: 'Isaac Newton', book: 'v2', n: 1 } });
-    assert.deepEqual(at.articleOf(at.get('atrial fibrillation')[0]).article, { title: 'Atrial fibrillation', book: 'v1', n: 0 });
+    const shelf = shelfOf(a);
+    const at = await shelf.of([med]);
+    assert.deepEqual(a.calls.got, ['med/titles.json']);
+    assert.equal(at.count, 5);
+    const named = await shelf.mentions(at.libs, pagesOf(p('He admired Isaac Newton, who had atrial fibrillation and heart failure.')));
+    assert.deepEqual(named.map((m) => m.article), [
+      { title: 'Isaac Newton', book: 'v2', n: 1 }, { title: 'Atrial fibrillation', book: 'v1', n: 0 }, { title: 'Heart failure', book: 'v1', n: 2 },
+    ]);
+  });
+
+  it('takes a volume\'s titles of the page where only the page can read them', async () => {
+    const a = access({ given: true });
+    const shelf = shelfOf(a);
+    const at = await shelf.of([med]);
+    assert.deepEqual(a.calls.got, []);
+    assert.deepEqual([...a.calls.given].sort(), ['med/v1', 'med/v2']);
+    assert.deepEqual((await shelf.mentions(at.libs, pagesOf(p('He admired Isaac Newton.')))).map((m) => m.article), [{ title: 'Isaac Newton', book: 'v2', n: 1 }]);
   });
 
   it('says which libraries\' titles could not be got, and asks for them again', async () => {
     const a = access({ fail: ['phys'] });
-    const shelf = new TitleShelf(a);
+    const shelf = shelfOf(a);
     const warn = console.warn;
     console.warn = () => {};
     try {
       const at = await shelf.of([med, phys]);
       assert.deepEqual(at.failed, [phys]);
-      assert.ok(at.get('heart failure').every((e) => e.lib === 'med'));
+      assert.deepEqual(at.libs, [med]);
+      assert.deepEqual((await shelf.mentions(at.libs, pagesOf(p('Then heart failure and a soft palate.')))).map((m) => m.lib.id), ['med', 'med']);
       assert.ok(!shelf.has(phys));
+      const before = a.calls.got.filter((u) => u.startsWith('phys/')).length;
       await shelf.of([phys]);
-      assert.deepEqual(a.calls.list, ['med', 'phys', 'phys']);
+      assert.ok(a.calls.got.filter((u) => u.startsWith('phys/')).length > before);
     } finally {
       console.warn = warn;
     }
   });
 
   it('holds a Wikipedia whose index is made and that is not too large, and lets go of those gone', async () => {
-    const shelf = new TitleShelf(access());
+    const shelf = shelfOf();
     assert.ok(shelf.canHold(med));
     assert.ok(!shelf.canHold(pg));
     assert.ok(!shelf.canHold({ ...med, indexing: { stage: 'sizes' } }));
     assert.ok(!shelf.canHold({ ...med, articles: MOST_ARTICLES + 1 }));
-    assert.ok(new TitleShelf(access(), { most: 5 }).canHold(phys));
+    assert.ok(shelfOf(access(), { most: 5 }).canHold(phys));
     await shelf.of([med, phys]);
+    const engine = await shelf.engine();
+    assert.deepEqual([...engine.held.keys()], ['med', 'phys']);
     shelf.keep([med, pg]);
     assert.ok(shelf.has(med) && !shelf.has(phys));
+    await shelf.engine(); // the engine is told after
+    assert.deepEqual([...engine.held.keys()], ['med']);
+  });
+
+  it('starts nothing until titles are wanted', async () => {
+    let started = 0;
+    const a = access();
+    const shelf = new TitleShelf(a, {
+      engine: () => {
+        started++;
+        return a.engine();
+      },
+    });
+    shelf.keep([med]);
+    assert.ok(shelf.canHold(med) && !shelf.has(med));
+    assert.equal(started, 0);
+    await shelf.of([med]);
+    await shelf.of([phys]);
+    assert.equal(started, 1);
   });
 });
 
@@ -202,6 +261,30 @@ describe('the mentions on the open pages', () => {
     assert.ok(filler(600).length > NEAR);
   });
 
+  it('are the same found in the pages\' blocks with the text round them, which is what goes to the engine', () => {
+    const blocks = [
+      h(1, 'Alcoholism'), p(`${filler(600)}It causes high blood pressure.`), p(`Then heart failure. ${filler(600)}`), p('Nuclear fusion in the ascus, alone.'),
+      p('Heart failure and high blood pressure again, said Isaac Newton.'), h(2, 'References'), li('On heart failure and high blood pressure.'), li('And atrial fibrillation with heart failure.'),
+      h(2, 'See also'), li('Atrial fibrillation and heart failure.'),
+    ];
+    const brief = (list, shift) => list.map((m) => [m.key, m.text, m.context, m.entries[0].lib, m.blocks.map((b) => b + shift)]);
+    let some = 0;
+    for (let first = 0; first < blocks.length; first++) {
+      for (let last = first; last < blocks.length; last++) {
+        const whole = mentionsOn(blocks, first, last, titles(), { own: 'top' });
+        const round = roundOf(blocks, first, last);
+        assert.ok(round.blocks.length <= blocks.length + 1);
+        assert.deepEqual(brief(mentionsOn(round.blocks, round.first, round.last, titles(), { own: 'top' }), first - round.first), brief(whole, 0), `blocks ${first} to ${last}`);
+        some += whole.length;
+      }
+    }
+    assert.ok(some > 20, String(some));
+    // Only the text round the pages goes: a long part's other blocks stay.
+    const long = [...Array.from({ length: 40 }, () => p(filler(400))), p('Heart failure and high blood pressure.'), ...Array.from({ length: 40 }, () => p(filler(400)))];
+    const sent = roundOf(long, 40, 40);
+    assert.deepEqual([sent.blocks.length, sent.first, sent.last], [3, 1, 1]);
+  });
+
   it('leave a list of sources alone, on the page it begins on and after', () => {
     const blocks = [p('Heart failure and high blood pressure.'), h(2, 'References'), li('On heart failure and high blood pressure, again.'), li('And atrial fibrillation.')];
     assert.deepEqual(mentionsOn(blocks, 0, 2, titles()).map((m) => [m.entries[0].title, m.blocks]), [['Heart failure', [0]], ['High blood pressure', [0]]]);
@@ -214,7 +297,7 @@ describe('his answer', () => {
   /** What he is asked of: a book of `lib`, its pages the whole of its one part. */
   const here = (lib, blocks, extra = {}) => ({
     book: { libId: lib.id, id: 'b1' }, parts: [{ c: 0, first: 0, last: blocks.length - 1 }], pages: 2, blocksOf: async () => blocks, libraries,
-    shelf: new TitleShelf(access()), ...extra,
+    shelf: shelfOf(), ...extra,
   });
 
   it('names the articles of other libraries the pages name, the first library that has one', async () => {
@@ -231,6 +314,8 @@ describe('his answer', () => {
     assert.deepEqual(answer.finds[0].mention, { text: 'high blood pressure', context: 'It raises the risk of high blood pressure and heart failure, as Isaac Newton knew.' });
     assert.deepEqual(steps, ['Getting the titles of 3 libraries…', 'Reading these pages…']);
     assert.equal(answer.search, null);
+    // Aloud he names them, which the list shows.
+    assert.equal(answer.said, 'These pages name 3 articles of other libraries: High blood pressure, Heart failure and Isaac Newton.');
     // One library's titles to get: it is named.
     const one = [];
     await lookHere(here(pg, blocks, { libraries: [pg, med], onStep: (s) => one.push(s) }));
@@ -240,10 +325,12 @@ describe('his answer', () => {
   it('says so when they name one, or none, and counts a single page as one', async () => {
     const one = await lookHere(here(pg, [p('He admired Isaac Newton.')], { pages: 1 }));
     assert.equal(one.text, 'This page names one article of another library.');
+    assert.equal(one.said, 'This page names one article of another library: Isaac Newton.');
     assert.equal(one.finds.length, 1);
     const none = await lookHere(here(pg, [p('Nothing of the kind, only a solar eclipse.')]));
     assert.equal(none.text, 'I see nothing on these pages that another library has an article on.');
     assert.deepEqual(none.finds, []);
+    assert.equal(none.said, undefined); // nothing more to say than is shown
     assert.equal((await lookHere(here(pg, [p('Nothing.')], { pages: 1 }))).text, 'I see nothing on this page that another library has an article on.');
   });
 
@@ -251,20 +338,21 @@ describe('his answer', () => {
     // In Physics, "heart failure" and "solar eclipse" are its own articles; WikiMed's others are not.
     const blocks = [p('Heart failure, high blood pressure and atrial fibrillation; then a solar eclipse.')];
     const a = access();
-    const answer = await lookHere(here(phys, blocks, { shelf: new TitleShelf(a) }));
+    const answer = await lookHere(here(phys, blocks, { shelf: shelfOf(a) }));
     assert.deepEqual(answer.finds.map((f) => f.article.title), ['High blood pressure', 'Atrial fibrillation']);
-    assert.ok(a.calls.volume.includes('phys/v1'));
+    assert.ok(a.calls.got.includes('phys/v1'));
   });
 
   it('gives the first five of more', async () => {
     const many = ['Alpha beta', 'Gamma delta', 'Epsilon zeta', 'Eta theta', 'Iota kappa', 'Lambda mu', 'Nu xi'];
     const a = access();
-    a.volume = async () => many;
+    a.volume = () => Promise.resolve(many);
     a.volumes = () => [{ id: 'v1' }];
     const blocks = [p(`${many.map((t) => t.toLowerCase()).join(', ')}.`)];
-    const answer = await lookHere(here(pg, blocks, { libraries: [pg, { ...med, articles: 7 }], shelf: new TitleShelf(a) }));
+    const answer = await lookHere(here(pg, blocks, { libraries: [pg, { ...med, articles: 7 }], shelf: shelfOf(a) }));
     assert.equal(answer.finds.length, MAX_FINDS);
     assert.equal(answer.text, 'These pages name 7 articles of other libraries; here are the first 5.');
+    assert.equal(answer.said, 'These pages name 7 articles of other libraries; here are the first 5: Alpha beta, Gamma delta, Epsilon zeta, Eta theta and Iota kappa.');
   });
 
   it('says what it could not look in, and why', async () => {
@@ -280,11 +368,12 @@ describe('his answer', () => {
     const warn = console.warn;
     console.warn = () => {};
     try {
-      const failing = await lookHere(here(pg, blocks, { shelf: new TitleShelf(access({ fail: ['phys'] })) }));
+      const failing = await lookHere(here(pg, blocks, { shelf: shelfOf(access({ fail: ['phys'] })) }));
       assert.equal(failing.text, 'These pages name one article of another library. I could not get the titles of Physics.');
-      const all = await lookHere(here(pg, blocks, { libraries: [pg, med], shelf: new TitleShelf(access({ fail: ['med'] })) }));
+      assert.equal(failing.said, 'These pages name one article of another library: Isaac Newton. I could not get the titles of Physics.');
+      const all = await lookHere(here(pg, blocks, { libraries: [pg, med], shelf: shelfOf(access({ fail: ['med'] })) }));
       assert.equal(all.text, 'I could not get the titles of WikiMed.');
-      const own = await lookHere(here(phys, blocks, { shelf: new TitleShelf(access({ fail: ['phys'] })) }));
+      const own = await lookHere(here(phys, blocks, { shelf: shelfOf(access({ fail: ['phys'] })) }));
       assert.equal(own.text, 'I could not get the titles of Physics, so I cannot tell what its pages name elsewhere.');
     } finally {
       console.warn = warn;

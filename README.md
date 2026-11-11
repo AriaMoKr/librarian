@@ -43,7 +43,9 @@ has no model, so there he answers as in the first.
 
 The third has begun: with a book open, *Mentioned here* at the foot of the page (or L) lists the
 articles of the other libraries that the open pages name, and *Take me there* brings one into your
-hands; Back brings your book back at your page. He goes by a rule, not a guess. The words must be
+hands; Back brings your book back at your page. In VR the button is at the end of the book's
+toolbar and the list on a panel of his beside the pages, and with his voice chosen he says the
+answer, naming the articles. He goes by a rule, not a guess. The words must be
 the article's title as written, two words or more, and the page must show which sense it means,
 by writing them as a name or by naming another article of the same library within a few lines:
 "large numbers of bats" is not mathematics' *Large numbers*. Read by hand over the website's
@@ -220,6 +222,7 @@ Then press **Enter VR**.
 | Take a book | click it | tap it | aim the crosshair, **A** | point and pull the trigger (or pinch) |
 | Ask the librarian | **L**, click him (beside the catalogue stand), or the box in the card | tap him, or the box in the card | aim the crosshair at him, **A**: the box in the card | point at him and pull the trigger: his panel |
 | There at once, while he leads the way | a click, Enter or Esc | a tap | **A** | the trigger |
+| What the open pages mention | **L**, or *Mentioned here* at the foot of the page | *Mentioned here* at the foot of the page | – | *Mentioned here* at the end of the book's toolbar |
 | Read | click the book or **Read** | tap **Read** | **A** | trigger on the book, or **A** |
 | Turn pages | ← → Space, or click a page | swipe, or tap a page | bumpers, or D-pad ← → | flick the right stick, or trigger on a page |
 | Text size, theme, contents | + / − · **N** · **C**, or the toolbar | toolbar | D-pad ↑ ↓ · **Y** · **X** | toolbar |

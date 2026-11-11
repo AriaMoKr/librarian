@@ -1,17 +1,19 @@
 // @ts-check
-// "Mentioned here" (docs/LIBRARIAN.md, experiment 3 step 2; SPEC §5.10): asked while a book is
-// open, the librarian tells which articles of other libraries its open pages name, by the rule
+// "Mentioned here" (docs/LIBRARIAN.md, experiment 3 steps 2 and 4; SPEC §5.10): asked while a book
+// is open, the librarian tells which articles of other libraries its open pages name, by the rule
 // for links between libraries (xref.js). Each is a find to be taken to: the article comes into
 // the reader's hands as a link's page does, and Back brings the book back at its page
 // (librarian.js: interaction.followTo).
 // What stands is told from the text round the pages (a mention's company may stand on the page
 // before), what is offered from the pages themselves, in their order. The titles are the
-// libraries' own, kept at hand (titles.js) and got only once someone asks. Pure but for what it
-// is given (tested in Node); the button and its list are here-panel.js.
+// libraries' own, kept at hand (titles.js) and got only once someone asks; the pages' blocks, with
+// the text round them, go to where the titles are kept (a worker: xref-engine.js), which answers
+// with the articles named. Pure but for what it is given (tested in Node); the button and its
+// list are here-panel.js, in a headset here-vr.js.
 
 import { isPage } from '../reader/spreads.js';
 import { MAX_FINDS } from './ask.js';
-import { matchesIn, mentionsIn, NEAR, windowOf } from './xref.js';
+import { NEAR, windowOf } from './xref.js';
 
 /**
  * @typedef {object} PagePart the open pages' blocks in one part (chunk) of the book
@@ -48,35 +50,18 @@ export function partsOf(spread, reader) {
 }
 
 /**
- * The mentions on pages (xref.js's rule): the matches on the blocks `first` to `last` of a part
- * that stand, told from the text round them, in the pages' order, each with where it first stands
- * on them (`block`, `blocks`: the part's) and the words round it there.
+ * Some pages' blocks with the text round them, as they go to where the titles are kept: enough
+ * to tell which matches on the pages stand (xref.js mentionsOn finds the same in them as in the
+ * whole part), and no more of the part than that.
  * @param {any[]} blocks the part's blocks
- * @param {number} first
- * @param {number} last
- * @param {{ get(key: string): import('./xref.js').Entry[] | undefined }} titles
- * @param {{ own?: string | null }} [options] own: the id of the book's own library
- * @returns {import('./xref.js').Mention[]}
+ * @param {number} first the pages' first block there
+ * @param {number} last their last
+ * @returns {import('./xref-engine.js').Part}
  */
-export function mentionsOn(blocks, first, last, titles, { own = null } = {}) {
-  // What stands: told with the text before and after, where its company may be.
+export function roundOf(blocks, first, last) {
   const round = windowOf(blocks, first, last, NEAR);
-  const standing = new Set();
-  for (const m of mentionsIn(round.blocks, titles, { own })) {
-    if (m.blocks.some((b) => b - round.lead + round.start >= first && b - round.lead + round.start <= last)) standing.add(m.key);
-  }
-  if (!standing.size) return [];
-  // What is offered: as the pages have it.
-  const page = windowOf(blocks, first, last, 0);
-  const shift = page.start - page.lead;
-  const out = [];
-  for (const m of matchesIn(page.blocks, titles, { own })) {
-    if (!standing.has(m.key)) continue;
-    m.block += shift;
-    m.blocks = m.blocks.map((b) => b + shift);
-    out.push(m);
-  }
-  return out;
+  const shift = round.lead - round.start;
+  return { blocks: round.blocks, first: first + shift, last: last + shift };
 }
 
 /** Names in a row: "A", "A and B", "A, B and C". @param {string[]} names */
@@ -99,7 +84,7 @@ const listed = (names) => (names.length < 3 ? names.join(' and ') : `${names.sli
 
 /**
  * Answers "what do these pages mention?": the articles of other libraries the open pages name, at
- * most MAX_FINDS of them as finds, in the pages' order.
+ * most MAX_FINDS of them as finds, in the pages' order. Aloud (`said`) he names them too.
  * @param {Here} o
  * @returns {Promise<import('./ask.js').Answer>}
  */
@@ -125,35 +110,32 @@ export async function lookHere({ book, parts, pages, blocksOf, libraries, shelf,
   ].join('');
   if (!usable.length) return say(`I cannot look in the other libraries here.${left()}`);
 
-  const titles = await shelf.of(ownToo ? [...usable, ownToo] : usable, {
+  const at = await shelf.of(ownToo ? [...usable, ownToo] : usable, {
     onGetting: (libs) => onStep(libs.length === 1 ? `Getting the titles of ${name(libs[0])}…` : `Getting the titles of ${libs.length} libraries…`),
   });
-  const failed = titles.failed.map(name);
-  if (ownToo && titles.failed.includes(ownToo)) return say(`I could not get the titles of ${name(ownToo)}, so I cannot tell what its pages name elsewhere.`);
-  if (titles.failed.length === usable.length + (ownToo ? 1 : 0)) return say(`I could not get the titles of ${listed(failed)}.`);
+  const failed = at.failed.map(name);
+  if (ownToo && at.failed.includes(ownToo)) return say(`I could not get the titles of ${name(ownToo)}, so I cannot tell what its pages name elsewhere.`);
+  if (!at.libs.length) return say(`I could not get the titles of ${listed(failed)}.`);
   onStep(pages === 1 ? 'Reading this page…' : 'Reading these pages…');
 
-  /** @type {Map<string, import('./xref.js').Mention>} */
-  const found = new Map();
+  /** @type {import('./xref-engine.js').Part[]} */
+  const round = [];
   for (const part of parts) {
     const blocks = await blocksOf(part.c);
-    for (const m of mentionsOn(blocks, part.first, part.last, titles, { own: ownToo?.id ?? null })) {
-      if (!found.has(m.key)) found.set(m.key, m);
-    }
+    if (blocks?.length) round.push(roundOf(blocks, part.first, part.last));
   }
+  const named = await shelf.mentions(at.libs, round, { own: ownToo?.id ?? null });
   /** @type {import('./ask.js').Find[]} */
-  const finds = [];
-  for (const m of found.values()) {
-    if (finds.length >= MAX_FINDS) break;
-    const to = titles.articleOf(m.entries[0]);
-    if (to) finds.push({ kind: 'article', article: to.article, lib: to.lib, mention: { text: m.text, context: m.context } });
-  }
-  const n = found.size;
+  const finds = named.slice(0, MAX_FINDS).map((m) => ({ kind: 'article', article: m.article, lib: m.lib, mention: { text: m.text, context: m.context } }));
+  const n = named.length;
   const These = `${these[0].toUpperCase()}${these.slice(1)}`;
   const verb = pages === 1 ? 'names' : 'name';
-  const text = !n ? `I see nothing on ${these} that another library has an article on.`
-    : n === 1 ? `${These} ${verb} one article of another library.`
-      : `${These} ${verb} ${n} articles of other libraries${n > finds.length ? `; here are the first ${finds.length}` : ''}.`;
   const notGot = failed.length ? ` I could not get the titles of ${listed(failed)}.` : '';
-  return { text: `${text}${notGot}${left()}`, finds, search: null };
+  const tail = `${notGot}${left()}`;
+  if (!n) return say(`I see nothing on ${these} that another library has an article on.${tail}`);
+  const head = n === 1 ? `${These} ${verb} one article of another library`
+    : `${These} ${verb} ${n} articles of other libraries${n > finds.length ? `; here are the first ${finds.length}` : ''}`;
+  // Aloud the articles are named: the list is not always looked at while he speaks.
+  const said = `${head}: ${listed(finds.map((f) => (f.kind === 'article' ? String(f.article.title) : '')))}.${tail}`;
+  return { text: `${head}.${tail}`, finds, search: null, said };
 }

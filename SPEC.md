@@ -1220,10 +1220,13 @@ public/
     librarian/tools.js   LibraryTools: the library as a model's tools (search, read, find), all it showed kept by id (pure but for the library).
     librarian/read.js    readFor: a model reads for a question through the tools, turn by turn; finish: its answer held to the rule (pure).
     librarian/cite.js    the citation rule: checkAnswer keeps the sentences that what they cite says (pure).
-    librarian/xref.js    links between libraries: the words of a text that are another library's article (matchesIn, mentionsIn), an author's names and a book's titles as articles (pure).
-    librarian/titles.js  TitleShelf: the Wikipedias' titles kept at hand, each library's got once (a site's list, or its volumes' contents).
-    librarian/here.js    "Mentioned here": the mentions on the open pages (mentionsOn) and his answer (lookHere) (pure but for what it is given).
-    librarian/here-panel.js  HerePanel: his button beside the open book and the list it opens (a screen's).
+    librarian/xref.js    links between libraries: the words of a text that are another library's article (matchesIn, mentionsIn, mentionsOn), an author's names and a book's titles as articles (pure).
+    librarian/xref-engine.js  XrefEngine: the libraries' titles kept, and pages' words tried against them (it imports xref.js alone).
+    librarian/xref-worker.js  the module worker the engine runs in: the engine's calls by message.
+    librarian/titles.js  TitleShelf: the Wikipedias' titles at hand, each library's got once (a site's list, or its volumes' contents); startEngine, RemoteEngine: the engine in its worker, else in the page.
+    librarian/here.js    "Mentioned here": the open pages' parts (partsOf), their blocks with the text round them (roundOf) and his answer (lookHere) (pure but for what it is given).
+    librarian/here-panel.js  HerePanel: his button beside the open book and the list it opens (a screen's); where the question is asked and answered, whatever shows it.
+    librarian/here-vr.js HereVR: in a headset, his button at the end of the book's toolbar and his panel beside the pages.
     librarian/model.js   ServerModel: the server's model as the page reaches it (§4): which one, a turn, the warm-up.
     librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choices, his reading.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
@@ -2376,8 +2379,10 @@ to Ollama, measured over 24 questions; its step 2 (2026-11-07): his reading in t
 server has a model and it is chosen; and its step 3 (2026-11-07): the library's own answer first
 while he reads on, his reading on his panel in VR, and his voice saying the answer he ends with
 (Answers with citations, below). Experiment 3's step 1 (2026-11-11): the rule for links between
-libraries and its measure over the demo set; and its step 2 (2026-11-11): "Mentioned here", his
-button beside the open book on a screen (Links between libraries, below).
+libraries and its measure over the demo set; its step 2 (2026-11-11): "Mentioned here", his
+button beside the open book on a screen; and its step 4 (2026-11-11): the same in a headset, on
+his panel beside the pages, and aloud, the titles kept in a worker (Links between libraries,
+below).
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
   the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks, reads }` (kept whole)
@@ -2931,7 +2936,8 @@ page, below).
 While a book or an article is read, he is to offer what the other libraries have on it
 (docs/LIBRARIAN.md). Step 1 (2026-11-11) is the rule and its measure: `librarian/xref.js` and
 `tools/librarian-xref.mjs`. Step 2 (2026-11-11) is "Mentioned here" on a screen (below, after the
-rule). Steps 3 and 4 are to come: "Also in the library" for the book in hand, and VR and aloud.
+rule). Step 4 (2026-11-11) is the same in a headset and aloud (after that). Step 3 is to come:
+"Also in the library" for the book in hand.
 
 - **Why words.** Counted over the demo set: no author or title of its 19 Gutenberg books (class
   P, the study of language) is an article of its Wikipedias, and every link kept in an article
@@ -3077,7 +3083,8 @@ articles of other libraries that the open pages name, and each is a *Take me the
   is open (the foot's bar is under it) the button is in the text view's toolbar, before "Put
   back", and the list in the text view's layer (`place`; `librarian.js` moves them as the text
   view opens and closes). **L** does the same from the view and from the text view's text (in
-  browse and inspect it still goes to the card's box). Not in VR (step 4).
+  browse and inspect it still goes to the card's box). In a headset: In a headset and aloud,
+  below.
 - **The list** opens over the view's corner, above the foot's bar: a heading, a ×, his answer in
   a `role="status"` said once (50 ms after it is emptied), what he is doing meanwhile on a line
   under it (seen, not said), and the finds as the card lists them (`findList`), the first with
@@ -3092,18 +3099,25 @@ articles of other libraries that the open pages name, and each is a *Take me the
   are in and the blocks some of which are on them (`reader.blocksOn`), and how many pages that is
   (one in the single-page view). In the text view they are the 3D book's pages at the reader's
   place.
-- **The mentions on them** (`mentionsOn(blocks, first, last, titles, { own })`): the matches
-  that stand are told from the text round the pages (`windowOf` with `NEAR`: a mention's company
-  may stand on the page before), and those with a place on the pages are offered as the pages
-  have them, in their order, each with the words round it there.
+- **The mentions on them** (`xref.js` `mentionsOn(blocks, first, last, titles, { own })`): the
+  matches that stand are told from the text round the pages (`windowOf` with `NEAR`: a mention's
+  company may stand on the page before), and those with a place on the pages are offered as the
+  pages have them, in their order, each with the words round it there. Only those blocks go to
+  where the titles are kept (`here.js` `roundOf`: the pages' blocks and the text round them, in
+  which `mentionsOn` finds the same as in the whole part; a test checks).
 - **The titles at hand** (`titles.js`, `TitleShelf`). Finding mentions takes every library's
   titles (step 1's count), so each Wikipedia's are got once, when first asked for, and kept
-  (`of(libraries, { onGetting })`, all those wanted at once; `keep(libraries)` lets go of those
-  no longer in the catalogue). Nothing is got before someone asks.
-  - How (`TitlesAccess`, the page's in `librarian.js`): a static site's list of them
-    (`api/library/<id>/titles.json`, the search's own, §4); else volume by volume, 4 at a time, a
-    volume's contents (`toc`) being its articles' titles: the server's `…/books/<volume>`, or for
-    a library opened in the browser the worker's (`local.meta`).
+  (`of(libraries, { onGetting })` → `{ libs, failed, count }`, all those wanted at once;
+  `mentions(libs, parts, { own })` → the articles named; `keep(libraries)` lets go of those no
+  longer in the catalogue). Nothing is got, and no worker started, before someone asks.
+  - Where they are kept (step 4): an engine (`xref-engine.js`, `XrefEngine`) in a module worker
+    of its own (`xref-worker.js`), which gets the lists itself, keeps the titles in its own
+    memory and answers with the mentions a page has (In a headset and aloud, below, says why).
+  - How (`TitlesAccess`, the page's in `librarian.js`): the address of a static site's list of
+    them (`api/library/<id>/titles.json`, the search's own, §4); else volume by volume, 4 at a
+    time, a volume's contents (`toc`) being its articles' titles: the address of the server's
+    `…/books/<volume>`, which the engine gets, or for a library opened in the browser the titles
+    themselves, which only the page can ask its worker for (`local.meta`) and hands on.
   - The book's own library's titles are got too when it is a Wikipedia: they tell which words
     are its own articles, no link to another library.
   - Left out, and said: a library still being indexed, and one of more than 200,000 articles
@@ -3118,7 +3132,8 @@ articles of other libraries that the open pages name, and each is a *Take me the
   to look in.", "… is still being indexed."). With no other Wikipedia: "No other library here has
   articles for me to look in." A find's lines (`findLines`): the article's title, its library and
   volume, and the page's words round its name, the name stressed, with at most 40 characters of
-  them before it (so it shows in the snippet's two lines).
+  them before it (so it shows in the snippet's two lines). Aloud (`said`, step 4) he names them
+  too: "These pages name 3 articles of other libraries: A, B and C."
 - **Take me there** (`takeThere`): a find with a `mention`, a book being read, is followed as a
   link of the book is (`interaction.followTo`, §5.6): the book goes back, the article's volume
   comes into the reader's hands at the article, and the place left is on the trail, so Back
@@ -3137,15 +3152,17 @@ articles of other libraries that the open pages name, and each is a *Take me the
   build served on the same machine (3 lists, and the three ZIM files' volumes through the
   worker), the heap growing from 15 to 29 MB; asked again it answered at once, the looking
   itself taking 3–5 ms. Nothing is drawn for it in the 3D view, and each frame it compares two
-  values.
+  values. Since step 4 the titles are in a worker: the page's heap grew from 14.8 to 16.3 MB.
 - **Tests.** `test/client-librarian-here.test.js` covers the titles kept small; the shelf (a
-  library's titles got volume by volume or from a list, once, all wanted at once, each title's
-  article, failures said and asked for again, what it can hold, letting go); the pages' parts;
-  the text round blocks; the mentions on pages (their order and words, company on the page
-  before, sources left alone); his answer (the first library, one, none, a single page, the
-  book's own library, the first five, what he could not look in and why); the question in the
-  card; a mention's lines; and a mention taken to as a link, or opened as any article with no
-  book open. The button and its list are checked in a browser:
+  library's titles got volume by volume, from a list or handed on by the page, once, all wanted
+  at once, each mention's article, failures said and asked for again, what it can hold, letting
+  go, nothing started until titles are wanted); the pages' parts; the text round blocks; the
+  mentions on pages (their order and words, company on the page before, sources left alone, the
+  same found in the blocks that go to the engine as in the whole part); his answer (the first
+  library, one, none, a single page, the book's own library, the first five, what he could not
+  look in and why, what he says aloud); the question in the card; a mention's lines; and a
+  mention taken to as a link, or opened as any article with no book open. The button and its
+  list are checked in a browser:
 
   Checked in headless Chrome (2026-11-11) on a server of this checkout's over the demo set, and
   the desktop case on a static build served locally:
@@ -3169,3 +3186,115 @@ articles of other libraries that the open pages name, and each is a *Take me the
     back to the page. The hint stood clear above the foot's two rows. The same in the text view,
     along its toolbar.
   - axe with the list open: nothing on a desktop, in the text view, on a phone or on a TV.
+
+**In a headset and aloud** (step 4, 2026-11-11): the same question beside the open book in VR,
+his answer on a panel beside the pages, and his voice saying it.
+
+- **Asked there** (`here-vr.js`, `HereVR`). The page's button is not seen in a headset, so his
+  button is in the room: "Mentioned here", a panel of 25 × 7 cm at the right end of the book's
+  toolbar, in its plane and level with its buttons, in the open book's frame (`interaction.holder`,
+  so it goes with the book as it is moved, brought nearer or made larger). It is there while a
+  book is read in a headset and he is shown. The trigger on it (a pinch with hand tracking)
+  asks, through the page's list (`HerePanel.toggle`).
+- **His panel beside the pages** (50 × 54 cm): to the right of the right-hand page, 3 cm from its
+  edge and turned 0.45 rad towards the reader, as the contents are on the left. On it: the
+  heading, Voice and ✕; his words (until they come, what he is doing: "Looking…", "Getting the
+  titles of 6 libraries…"); and the finds as rows, each the article's name, its library, and
+  "Take me there". A row chosen is taken as on a screen (`HerePanel.take`: followed as a link of
+  the book, so B, Y or "↩ Back" brings the book back at its page); ✕ closes it, and so do the
+  pages turned.
+- **It follows the page's list**, as his desk's panel follows the card, so a headset and a
+  screen always say the same: `HerePanel` tells what it is doing (`onLooking`, `onStep`,
+  `onAnswer`; `looking`, `step`, `answer`), and `HereVR.refresh()` shows it. Out of the headset
+  with the list open, the page's list is there on the screen; into it with the list open, his
+  panel shows it. In a headset the page's focus closes nothing (`presenting`).
+- **One of the two at a time, made late.** The button shows while the list is closed, the list
+  while it is open: 1 draw call for each eye while a book is read in a headset, none on a screen
+  and none while browsing. His desk's panel closes as the list opens (one of his panels at a
+  time). The two are made the first time a headset shows a book being read. Each frame
+  (`update`) it compares the toolbar's place and size and the page's edge, and places the two
+  again only when one changed; it makes nothing (the page's size is asked once a book). A panel
+  is drawn again only when its words change or a pointer lights a row.
+- **Aloud.** With his voice chosen (`speaks`) he says the answer as it comes, on a screen too,
+  naming the articles (`Answer.said`: the list is not always looked at while he speaks). A new
+  asking stops him, and so does the list closing (✕, a page turned, an article taken). The
+  list's Voice button chooses his voice, as on his desk's panel.
+- **Where the titles are kept: a worker.** Measured on the development PC (Node, the demo set):
+  keeping a library's titles by their words takes 1.5 ms for Wikipedia 100, 18.5 ms for
+  chemistry's 9,254, 21.5 ms for golf's 12,159, 43 ms for physics' 21,810, 51.5 ms for
+  mathematics' 23,325 and 131 ms for WikiMed's 71,518; parsing WikiMed's list (1.6 MB) takes
+  7.6 ms; a spread's matching 2.5–3.3 ms (a long article whole: 66 ms). A frame in a headset has
+  13.9 ms and a Quest is several times slower; and 110,000 titles are some 14 MB of small
+  objects, which a full garbage collection of the page would walk. So:
+  - `XrefEngine` (`xref-engine.js`) runs in a module worker (`xref-worker.js`), started with the
+    first asking. Its calls: `list(lib, url)` and `volume(lib, k, id, url)` get a list of titles
+    or a volume's contents; `put(lib, k, id, titles)` takes a volume's titles from the page;
+    `build(lib)` keeps them by their words, in the library's order; `keep(libs)` lets go of the
+    others; `look({ libs, own, parts })` answers with the mentions on pages, each with its
+    article (`{ key, text, context, lib, title, book, n }`). By message: `{ id, method, args }`
+    in, `{ id, value }` or `{ id, error }` out, and `{ ready: true }` once loaded.
+  - The page sends only the pages' blocks with the text round them (`roundOf`) and gets the few
+    mentions back: 2–4 ms there and back.
+  - `startEngine()` (`titles.js`): the worker where one starts and says so within 5 s; where
+    none does (no module workers, a script that fails, silence), the same engine in the page
+    (`inlineEngine`), which pauses after each 4 ms of keeping. A worker that stops later is
+    replaced by the page's engine, and the titles got again.
+  - The worker imports `xref-engine.js` and `xref.js` alone (a module worker has no import map;
+    a test checks), and the page names it by `new URL('./xref-worker.js', import.meta.url)`, so
+    the Pages build tags its address.
+- **Two departures from the proposal**, which said "no new draw calls, since the list goes on
+  his existing panel":
+  - The list is a panel of its own beside the book, not his desk's, which stays where it stands
+    in the room and closes as this one opens. So no more is drawn than with his desk's panel
+    open, but there is one more small canvas (650 × 702 px), made only in a headset.
+  - A headset has no key to ask with, so the button is new: 1 draw call for each eye while a
+    book is read in a headset.
+  The only shared file changed is the help's row for a headset (`ui/overlay.js`).
+- **Tests.** `test/client-librarian-engine.test.js` runs the engine (a list kept by its volumes,
+  volumes' contents, titles handed on, the mentions with their articles, the first library
+  given first, the book's own library, libraries let go of, what could not be got, its pauses
+  in the page's thread), the worker itself on a stand-in for its scope (its messages copied as
+  a browser copies them), the page over it (the same answers as from its own thread, nothing
+  got twice), the page's thread where no worker starts, fails or answers, and the worker's
+  imports. `test/client-librarian-here-vr.test.js` runs `HereVR` on a stand-in for the room and
+  a stub canvas: nothing on a screen; the button's place and what it asks; the list as it is
+  asked, answered and closed, its rows and what they take, five rows and a long answer within
+  the panel; the Voice button; hidden with the book, out of the headset or with him hidden;
+  shown at once when asked before the headset; placed again only when the book moves, with no
+  object made of the page's size.
+- **Costs** (2026-11-11: the emulator, `?xr=emulate`, in headless Chrome on the development PC
+  with software GL; not a Quest):
+  - Draw calls, both eyes together: 74 browsing; 84 with a book read and his button; 82 with him
+    hidden; 84 with his list open.
+  - The first asking answered in 1.0–1.4 s (the titles of 6 libraries: 142 volumes' contents
+    from a server; 3 lists, and 59 volumes handed on by the page, from a static build), asked
+    again in 0.12 s; there and back to the worker 2–4 ms.
+  - The page's thread in a first asking: the librarian's own code took 10–27 ms in all over
+    that second (a CPU profile), no task of 50 ms or more, and the longest frames were 17–28 ms
+    against 11–16 ms while reading still.
+  - The page's heap on a desktop: 14.8 → 16.3 MB, against 15 → 29 MB with the titles in the
+    page (step 2, and where no worker starts).
+  - A still stretch of reading (5 s, 800 frames): none of his panels drawn again, and his code
+    allocated between nothing and 3.9 kB in three runs (sampled; nothing per frame).
+  - His list is drawn 3 times in a first asking and twice after (4–6 ms a drawing on the PC).
+- **Checked** in headless Chrome with the emulator (2026-11-11), his voice chosen, on a server
+  of this checkout's over the demo set and on a static build served locally:
+  - Browsing in VR, none of his panels is by a book. With "Alcoholism" of Wikipedia 100 open,
+    his button was at the toolbar's end. The trigger on it: his panel beside the pages showed
+    "Getting the titles of 6 libraries…", "Reading these pages…", then "These pages name 4
+    articles of other libraries." and four rows (World Health Organization, Immune system,
+    Wernicke–Korsakoff syndrome, Immune response, each WikiMed's), and he said it, naming the
+    four. His desk's panel was closed.
+  - ✕ by the trigger closed it and stopped him; asked again it came at once. A turned page
+    closed it, and the button was back.
+  - On the next pages the first row (Alcoholics Anonymous) was taken by the trigger: WikiMed's
+    volume 4 was in hand at the article, and the B button brought "Alcoholism" back at its
+    pages. In Sapir's *Language*: Adam's apple, Soft palate and Hard palate, said too.
+  - Voice on his panel turned his voice off (kept in `vrlbry:librarian`). Out of the headset
+    with the list open, his panels were gone and the page's list was on the screen.
+  - On screens, with the titles in the worker: a desktop, the text view, a phone and a TV as in
+    step 2, axe finding nothing; with his voice chosen he said each answer and stopped at Esc.
+    With the worker made to fail (as where module workers are missing): the same answers from
+    the page's thread, the first in 0.9 s with no task of 50 ms or more.
+  - Not on a Quest: there is no headset here. Whether Quest Browser has a voice for him is not
+    known either.

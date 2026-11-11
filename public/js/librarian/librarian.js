@@ -23,10 +23,13 @@
 //   of other libraries that the open pages name (here.js, by xref.js's rule), each a Take me
 //   there: the article comes into the reader's hands as a link's page does, and Back brings the
 //   book back. The other libraries' titles are got once, when first asked (titles.js): a static
-//   site's list of them, else their volumes' contents.
+//   site's list of them, else their volumes' contents; they are kept, and the pages read against
+//   them, in a worker (xref-worker.js). In a headset the button is by the book's toolbar and the
+//   list on his panel beside the pages (here-vr.js); with his voice chosen he says the answer,
+//   naming the articles.
 // Experiment 1: step 1, the words in the card; step 2, the figure and his panel; step 3, the walk;
 // step 4, his voice. Experiment 2: step 2, his reading in the card; step 3, on his panel and aloud.
-// Experiment 3: step 2, "Mentioned here" on a screen.
+// Experiment 3: step 2, "Mentioned here" on a screen; step 4, in a headset and aloud.
 
 import { findText, getBookMeta, getChunk } from '../api.js';
 import * as local from '../local/local.js';
@@ -37,10 +40,11 @@ import { ask, MAX_FINDS, parseQuestion } from './ask.js';
 import { FAILED, LibrarianCard } from './card.js';
 import { Desk } from './desk.js';
 import { HerePanel } from './here-panel.js';
+import { HereVR } from './here-vr.js';
 import { lookHere, partsOf } from './here.js';
 import { ServerModel } from './model.js';
 import { answerOf, couldNotRead, readFor, warmTurn } from './read.js';
-import { TitleShelf } from './titles.js';
+import { startEngine, TitleShelf } from './titles.js';
 import { FIRST_STEP, LibraryTools, stepText } from './tools.js';
 import { Voice } from './voice.js';
 
@@ -216,22 +220,19 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   // "Mentioned here" (experiment 3), beside the open book. The other libraries' titles, got when
   // first asked: a static site keeps each Wikipedia's as one list (the search's own, api.js);
   // elsewhere a volume's contents are its articles' titles (the server's, or for a library opened
-  // here the worker's).
-  /** @param {string} path a file or a route of the site (SPEC §4) */
-  const fetchJSON = async (path) => {
-    const res = await fetch(new URL(path, SITE));
-    if (!res.ok) throw new Error(`${res.status} ${path}`);
-    return res.json();
-  };
+  // here its worker's, which only the page can ask). They are kept where they are no weight on
+  // the view's frames: in a worker of their own, started with the first asking (titles.js), which
+  // is given the addresses and gets them itself.
+  /** @param {string} path a file or a route of the site (SPEC §4), as an address a worker can get */
+  const siteUrl = (path) => new URL(path, SITE).href;
   const enc = encodeURIComponent;
   const shelf = new TitleShelf({
-    list: async (lib) => (interaction.staticSite && !local.isLocal(lib.id) ? fetchJSON(`api/library/${enc(fileName(lib.id))}/titles.json`) : null),
+    list: (lib) => (interaction.staticSite && !local.isLocal(lib.id) ? siteUrl(`api/library/${enc(fileName(lib.id))}/titles.json`) : null),
     volumes: (lib) => catalogue().booksByLib[lib.id] ?? [],
-    volume: async (lib, id) => {
-      const meta = local.isLocal(lib.id) ? await local.meta(lib.id, id) : await fetchJSON(`api/libraries/${enc(lib.id)}/books/${enc(id)}`);
-      return (meta.toc ?? []).map((/** @type {{ title?: string }} */ e) => String(e.title ?? ''));
-    },
-  });
+    volume: (lib, id) => (local.isLocal(lib.id)
+      ? local.meta(lib.id, id).then((/** @type {{ toc?: Array<{ title?: string }> }} */ meta) => (meta.toc ?? []).map((e) => String(e.title ?? '')))
+      : siteUrl(`api/libraries/${enc(lib.id)}/books/${enc(id)}`)),
+  }, { engine: startEngine });
   const here = new HerePanel({
     look: ({ onStep }) => {
       const { libraries } = catalogue();
@@ -246,7 +247,23 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     pages: () => interaction.spreadShown ?? null,
     take, // no walk: the article comes into the reader's hands, as a link's page does
     tv,
+    presenting: () => !!interaction.controls?.presenting,
   });
+  // In a headset (step 4): his button by the book's toolbar, and his panel beside the pages with
+  // the same answer and finds; his desk's panel closes as it opens, one of his panels at a time.
+  const beside = new HereVR({ interaction, here, speech, onOpen: () => desk.close() });
+  here.onLooking = () => {
+    speech.stop(); // asked again: the last answer stops
+    beside.refresh();
+  };
+  here.onStep = () => beside.refresh();
+  here.onAnswer = (answer) => {
+    // Said as his answers are, once chosen, the articles named (here.js: `said`); the list closed
+    // (a page turned, an article taken), he stops.
+    if (answer && speech.on()) speech.say(answer.said ?? answer.text);
+    else if (!answer) speech.stop();
+    beside.refresh();
+  };
   // The button where the book is read: in the bar at the page's foot, after "Text view", or in the
   // text view's toolbar while that is open (the foot's bar is under it), the list over that view.
   const foot = overlay.root.querySelector('.ov-bottom');
@@ -258,8 +275,9 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   };
   let inText = false;
   placeHere(false);
-  // Each frame (nothing made): the button follows the text view, and the list closes as the pages
-  // it was asked of go (a turned page, a link followed, the book put back).
+  // Each frame (nothing made): the button follows the text view, the list closes as the pages it
+  // was asked of go (a turned page, a link followed, the book put back), and in a headset his
+  // button and panel are where the book is.
   interaction.onFrame?.(() => {
     const text = !!interaction.textView?.isOpen;
     if (text !== inText) {
@@ -267,10 +285,11 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
       placeHere(text);
     }
     here.sync();
+    beside.update();
   });
 
   // For the console and scripted checks: __vrlbry.interaction.librarian.
-  interaction.librarian = { card, desk, voice, model, here, shelf };
+  interaction.librarian = { card, desk, voice, model, here, shelf, beside };
   // Out of VR his panel goes: on a screen the card is his.
   interaction.renderer?.xr?.addEventListener?.('sessionend', () => desk.close());
 
@@ -284,6 +303,7 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     card.setShown(on);
     desk.setShown(on);
     here.setShown(on);
+    beside.setShown(on);
   };
   box.checked = prefs.shown !== false;
   box.onchange = () => {
@@ -308,6 +328,7 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
       ? 'The librarian speaks his answers (in this device’s own voice)'
       : 'The librarian speaks his answers (this device has no English voice of its own)';
     desk.refresh();
+    beside.refresh(); // his panel beside the book has the Voice button too
   };
   /** Chosen in the help dialog or on his panel: kept, and heard at once. @param {boolean} on */
   function setSpeaks(on) {

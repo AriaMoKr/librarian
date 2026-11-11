@@ -477,6 +477,39 @@ export function mentionsIn(blocks, titles, options) {
   return nearestOf(matchesIn(blocks, titles, options)).filter(stands);
 }
 
+/**
+ * The mentions on pages: the matches on the blocks `first` to `last` of a part that stand, told
+ * from the text round them (a mention's company may stand on the page before), in the pages'
+ * order, each with where it first stands on them (`block`, `blocks`: the part's) and the words
+ * round it there. What is offered is as the pages have it.
+ * @param {any[]} blocks the part's blocks, or those round the pages (windowOf, with NEAR)
+ * @param {number} first
+ * @param {number} last
+ * @param {{ get(key: string): Entry[] | undefined }} titles
+ * @param {{ own?: string | null }} [options] own: the id of the book's own library
+ * @returns {Mention[]}
+ */
+export function mentionsOn(blocks, first, last, titles, { own = null } = {}) {
+  // What stands: told with the text before and after, where its company may be.
+  const round = windowOf(blocks, first, last, NEAR);
+  const standing = new Set();
+  for (const m of mentionsIn(round.blocks, titles, { own })) {
+    if (m.blocks.some((b) => b - round.lead + round.start >= first && b - round.lead + round.start <= last)) standing.add(m.key);
+  }
+  if (!standing.size) return [];
+  // What is offered: as the pages have it.
+  const page = windowOf(blocks, first, last, 0);
+  const shift = page.start - page.lead;
+  const out = [];
+  for (const m of matchesIn(page.blocks, titles, { own })) {
+    if (!standing.has(m.key)) continue;
+    m.block += shift;
+    m.blocks = m.blocks.map((b) => b + shift);
+    out.push(m);
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------------
 // A book's author and title as articles (step 3 looks them up; an article found must still say
 // it is theirs).
