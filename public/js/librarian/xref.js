@@ -582,6 +582,16 @@ export function surnameOf(author) {
 const VOLUME = /(?:\s*[,;:]\s*|\s+[-\u2014]\s*|\s*\()(?:volumes?|vols?\.?|parts?|books?)\s+(?:\d+|[ivxlc]+)\b(?:\s*\(?of\s+(?:\d+|[ivxlc]+)\)?)?\)?\s*$/i;
 
 /**
+ * A title's volume, where it ends with one ("…, Volume 1 (of 2)": "1"; " — Part II": "ii"); ''
+ * for none. Two volumes of one work are not the same book.
+ * @param {string | null | undefined} title
+ */
+export function volumeOf(title) {
+  const m = VOLUME.exec(plain(String(title ?? '')).trim());
+  return m ? (/(\d+|[ivxlc]+)\b(?:\s*\(?of\s+(?:\d+|[ivxlc]+)\)?)?\)?\s*$/i.exec(m[0])?.[1] ?? '').toLowerCase() : '';
+}
+
+/**
  * The titles a book may have an article under, the likeliest first: its title without a subtitle
  * or a volume's number ("Language" for "Language: An Introduction to the Study of Speech"), then
  * as Wikipedia tells works of one name apart ("Emma (novel)", "Language (Sapir book)"), then the

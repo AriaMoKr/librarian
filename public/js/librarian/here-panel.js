@@ -12,6 +12,9 @@
 // his panel beside the book (here-vr.js) asks through it and follows it (onLooking, onStep,
 // onAnswer), as his desk's panel follows the card, so the two always say the same; and his voice
 // says the answer it ends with (librarian.js).
+// "Also in the library" (step 3) is a second one of these, with its own words (`label`, `hint`,
+// `id`, `also`): its button is there whenever a book is in hand, open or not, and its list closes
+// as that book goes (librarian.js gives it what it asks and what it was asked of).
 
 import { fillImages, findList, FAILED } from './card.js';
 
@@ -29,8 +32,16 @@ export class HerePanel {
    * @param {boolean} [o.tv] a TV: closed, its button has the focus again
    * @param {() => boolean} [o.presenting] whether the view is a headset's: the page is not seen
    *   then, and where its focus is closes nothing
+   * @param {string} [o.label] the button's words, and the list's heading
+   * @param {string} [o.hint] what the button is for (its tooltip)
+   * @param {string} [o.id] the list's id
+   * @param {boolean} [o.also] "Also in the library": shown with a book in hand, not only an open one
    */
-  constructor({ look, take, pages = () => null, tv = false, presenting = () => false }) {
+  constructor({
+    look, take, pages = () => null, tv = false, presenting = () => false,
+    label = 'Mentioned here', hint = 'The articles of other libraries that these pages name (L)', id = 'lb-here', also = false,
+  }) {
+    this.label = label;
     this._look = look;
     this._take = take;
     this._pages = pages;
@@ -59,26 +70,27 @@ export class HerePanel {
 
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'lb-here-btn';
-    button.textContent = 'Mentioned here';
-    button.title = 'The articles of other libraries that these pages name (L)';
+    button.className = also ? 'lb-here-btn lb-also-btn' : 'lb-here-btn';
+    button.textContent = label;
+    button.title = hint;
     button.setAttribute('aria-expanded', 'false');
-    button.setAttribute('aria-controls', 'lb-here');
+    button.setAttribute('aria-controls', id);
     button.addEventListener('click', () => this.toggle());
     /** The button, put where the book is read (place). */
     this.button = button;
 
     const panel = document.createElement('section');
-    panel.className = 'lb-here';
-    panel.id = 'lb-here';
+    panel.className = also ? 'lb-here lb-also' : 'lb-here';
+    panel.id = id;
     panel.hidden = true;
-    panel.setAttribute('aria-label', 'Mentioned here');
+    panel.setAttribute('aria-label', label);
     panel.setAttribute('data-own-keys', '');
     panel.innerHTML = `
-      <header class="lb-here-head"><h2 class="lb-here-title">Mentioned here</h2><button class="lb-here-close" type="button" aria-label="Close">×</button></header>
+      <header class="lb-here-head"><h2 class="lb-here-title"></h2><button class="lb-here-close" type="button" aria-label="Close">×</button></header>
       <p class="lb-answer" role="status"></p>
       <p class="lb-step" aria-hidden="true" hidden></p>
       <ul class="lb-finds" aria-label="What the librarian found" hidden></ul>`;
+    /** @type {HTMLElement} */ (panel.querySelector('.lb-here-title')).textContent = label;
     /** The list it opens. */
     this.panel = panel;
     this._answerEl = /** @type {HTMLElement} */ (panel.querySelector('.lb-answer'));
@@ -163,6 +175,7 @@ export class HerePanel {
     empty.setAttribute('aria-busy', 'true');
     this.panel.hidden = false;
     this.button.setAttribute('aria-expanded', 'true');
+    this._lift();
     this._closeEl.focus({ preventScroll: true });
     this._lookingTimer = setTimeout(() => {
       if (token === this._token) this._say('Looking…');
@@ -229,6 +242,17 @@ export class HerePanel {
    */
   sync() {
     if (!this.panel.hidden && this._pages() !== this.asked) this.close();
+  }
+
+  /**
+   * The list above the bar its button is in, however many rows that is (with his two buttons a
+   * phone's bar wraps). A TV's, and the text view's (whose toolbar is at its top), are placed by
+   * their style sheets.
+   */
+  _lift() {
+    const bar = this.button.parentElement;
+    const foot = !this.tv && !!bar?.classList.contains('ov-bottom');
+    this.panel.style.bottom = foot && bar ? `${Math.round(window.innerHeight - bar.getBoundingClientRect().top + 12)}px` : '';
   }
 
   /** What he is doing meanwhile ('' for nothing): seen, not said. @param {string} text */

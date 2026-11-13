@@ -1226,7 +1226,8 @@ public/
     librarian/titles.js  TitleShelf: the Wikipedias' titles at hand, each library's got once (a site's list, or its volumes' contents); startEngine, RemoteEngine: the engine in its worker, else in the page.
     librarian/here.js    "Mentioned here": the open pages' parts (partsOf), their blocks with the text round them (roundOf) and his answer (lookHere) (pure but for what it is given).
     librarian/here-panel.js  HerePanel: his button beside the open book and the list it opens (a screen's); where the question is asked and answered, whatever shows it.
-    librarian/here-vr.js HereVR: in a headset, his button at the end of the book's toolbar and his panel beside the pages.
+    librarian/here-vr.js HereVR: in a headset, his buttons by the book in hand (at the end of an open book's toolbar) and his panel beside it.
+    librarian/also.js    "Also in the library": for the book in hand, the articles on its author and on itself, the same work elsewhere, the author's other books; from an article, the books (lookAlso; pure but for what it is given).
     librarian/model.js   ServerModel: the server's model as the page reaches it (§4): which one, a turn, the warm-up.
     librarian/librarian.js  startLibrarian: the card's part and the desk, L, Enter / Esc while walking, the help's choices, his reading.
     main.js              bootstrap: renderer, scene, camera rig, XR session, loop, IWER dev flag.
@@ -2381,8 +2382,8 @@ while he reads on, his reading on his panel in VR, and his voice saying the answ
 (Answers with citations, below). Experiment 3's step 1 (2026-11-11): the rule for links between
 libraries and its measure over the demo set; its step 2 (2026-11-11): "Mentioned here", his
 button beside the open book on a screen; and its step 4 (2026-11-11): the same in a headset, on
-his panel beside the pages, and aloud, the titles kept in a worker (Links between libraries,
-below).
+his panel beside the pages, and aloud, the titles kept in a worker; and its step 3 (2026-11-12):
+"Also in the library", for the book in hand (Links between libraries, below).
 
 - **Optional.** The help has the choice "Show the librarian (ask him for a book in the card or at
   the stand, or press L)", stored as `vrlbry:librarian` = `{ shown, speaks, reads }` (kept whole)
@@ -2936,8 +2937,8 @@ page, below).
 While a book or an article is read, he is to offer what the other libraries have on it
 (docs/LIBRARIAN.md). Step 1 (2026-11-11) is the rule and its measure: `librarian/xref.js` and
 `tools/librarian-xref.mjs`. Step 2 (2026-11-11) is "Mentioned here" on a screen (below, after the
-rule). Step 4 (2026-11-11) is the same in a headset and aloud (after that). Step 3 is to come:
-"Also in the library" for the book in hand.
+rule). Step 4 (2026-11-11) is the same in a headset and aloud (after that). Step 3 (2026-11-12)
+is "Also in the library" for the book in hand (last).
 
 - **Why words.** Counted over the demo set: no author or title of its 19 Gutenberg books (class
   P, the study of language) is an article of its Wikipedias, and every link kept in an article
@@ -3195,7 +3196,9 @@ his answer on a panel beside the pages, and his voice saying it.
   toolbar, in its plane and level with its buttons, in the open book's frame (`interaction.holder`,
   so it goes with the book as it is moved, brought nearer or made larger). It is there while a
   book is read in a headset and he is shown. The trigger on it (a pinch with hand tracking)
-  asks, through the page's list (`HerePanel.toggle`).
+  asks, through the page's list (`HerePanel.toggle`). Since step 3 the panel is 25 × 14 cm with
+  no ground of its own and holds two buttons, "Also in the library" above it, and it is there
+  with a closed book in hand too (Also in the library, below).
 - **His panel beside the pages** (50 × 54 cm): to the right of the right-hand page, 3 cm from its
   edge and turned 0.45 rad towards the reader, as the contents are on the left. On it: the
   heading, Voice and ✕; his words (until they come, what he is doing: "Looking…", "Getting the
@@ -3209,9 +3212,10 @@ his answer on a panel beside the pages, and his voice saying it.
   with the list open, the page's list is there on the screen; into it with the list open, his
   panel shows it. In a headset the page's focus closes nothing (`presenting`).
 - **One of the two at a time, made late.** The button shows while the list is closed, the list
-  while it is open: 1 draw call for each eye while a book is read in a headset, none on a screen
-  and none while browsing. His desk's panel closes as the list opens (one of his panels at a
-  time). The two are made the first time a headset shows a book being read. Each frame
+  while it is open: 1 draw call for each eye while a book is read in a headset (since step 3:
+  while one is in hand), none on a screen and none while browsing. His desk's panel closes as
+  the list opens (one of his panels at a time). The two are made the first time a headset shows
+  a book being read (in hand). Each frame
   (`update`) it compares the toolbar's place and size and the page's edge, and places the two
   again only when one changed; it makes nothing (the page's size is asked once a book). A panel
   is drawn again only when its words change or a pointer lights a row.
@@ -3298,3 +3302,127 @@ his answer on a panel beside the pages, and his voice saying it.
     the page's thread, the first in 0.9 s with no task of 50 ms or more.
   - Not on a Quest: there is no headset here. Whether Quest Browser has a voice for him is not
     known either.
+
+**Also in the library** (step 3, 2026-11-12): asked with a book in hand, open or not, he tells
+what the other libraries have on it, and from a Wikipedia's article on a writer or a book, the
+books themselves (`also.js`, `lookAlso`).
+
+- **What he looks for**, for a book of a library that is no Wikipedia:
+  - *the article on its author*, in each Wikipedia: an article called by one of the author's
+    names (`xref.js` `authorNames`: "F. Max (Friedrich Max) Müller" is *Friedrich Max Müller*, *F.
+    Max Müller* and *Max Müller*; at most 4, the fullest first), by its title or another name of
+    its (the search's `from`);
+  - *the article on the book*: one called by a form its title may have (`titleForms`: "Language",
+    "Language (Sapir book)", "Emma (novel)", …; at most 8);
+  - *the same work in another library*: a book of the same title without its subtitle, of the
+    same volume (`xref.js` `volumeOf`) and the same author (`workKey`, `sameAuthor`); with no
+    author to go by ("Beowulf", Anonymous), one that another library has so too;
+  - *the author's other books elsewhere*: the other libraries' books of the same author.
+- **Whose an article is.** He can only find things, so an article is offered as theirs where it
+  shows it is:
+  - *on an author* (`showsAuthor`) when it names a book of theirs that the catalogue has, gives
+    their fuller name in its opening ("Friedrich Max Müller" in *Max Müller*), or is named by
+    three names or more spelled out ("Robert Gordon Latham");
+  - a book's title is known in an article by its words in a row (`titleSought`, `namesTitle`:
+    without its subtitle, a hyphen parting words): whatever their case where three of them or
+    more are its own, else written as a title, with its capitals ("Common Sense", not "common
+    sense"). A title of words many share, of the author's own name or of one short word tells
+    nothing ("Poems", "The Works of Edgar Allan Poe", "Emma");
+  - an article of the author's name that shows none of this is offered as what it is, *an
+    article of the author's name*, and he says "nothing in it tells me it is the same person";
+  - *on a book* (`showsBook`) when its title names the author in brackets ("Language (Sapir
+    book)"), or its first paragraph names the author and says it is a book, a novel, a poem and
+    the like: "Language" is the article on language (it names Sapir only further down), and
+    "Relativity" a theory of Einstein's, no book;
+  - a page that only lists what a name may refer to is none (`listsNames`).
+  An article's opening is its paragraphs before the first heading under its title (`openingOf`).
+- **Whose a book is** (`sameAuthor`): between two Gutenberg files by Project Gutenberg's own
+  number for the author (`authorId`: two authors of one name have two), else by a name the two
+  share.
+- **From a Wikipedia's article** (the volume open at it): the books whose title's form is the
+  article's title, where the article shows it is on that book ("the book this article is about"),
+  and the books of an author of the article's name, where the article shows it is on that author
+  (each author of that name told apart). It reads only the catalogue and the open article. With
+  the volume not open: "Ask me this at an article: …".
+- **What it asks of the libraries**, only once asked, and only where a typed search goes: of each
+  Wikipedia (not one still being indexed) a search by each of the author's names until an article
+  shows it is theirs, and one by the title, which finds its forms among what begins with it (the
+  forms cut off where 12 or more begin so are asked for by name); and the articles found, read to
+  see whose they are (`getChunk`). A Wikipedia that has not answered in 12 s (`ALSO_WAIT`: one
+  read over the network a block at a time) is left out, and said: "I did not hear from … in
+  time." The catalogue's books are the page's own (`bookIndex`). An article is read in slices of
+  4 ms where a headset's frames must go on (`readWords`, `breathe`).
+- **His answer**: at most 5 finds (`MAX_FINDS`): the articles on the author, on the book, the same
+  work, an article of the author's name, then the author's other books; each with what it is to
+  the book (a find's `also`: 'author', 'title', 'same', 'name', 'other'; from an article 'itself',
+  'by'), shown under its title (`ALSO`, `findLines`). "Also in the library: the article on its
+  author, the article on this book, the same work in Wikisource and 3 other books by Mark Twain."
+  (then "And an article called “…”, though nothing in it tells me it is the same person.", "Here
+  are the first 5."); "I see nothing else in the library on this book or its author."; with one
+  library, "There is no other library here for me to look in."; from an article, "The library has
+  the book this article is about." / "… 6 books by Mark Twain." / "I see no book in the library
+  that this article is about, nor any by someone of its name."
+- **Where it is asked**: a second button of his, "Also in the library" (a second `HerePanel`:
+  `label`, `hint`, `id`, `also`), in the foot's bar whenever a book is in hand (`ov-bookout`),
+  after "Mentioned here" while it is open; in the text view's toolbar while that is open. One of
+  the two lists at a time. Its list closes as the book goes (and, for a Wikipedia's volume, as
+  the article shown is another), not at a turned page. With both buttons the bar wraps on a
+  phone held upright, and a list stands above it however many rows that is (`HerePanel._lift`).
+  On a TV a book in hand's row has it after "Put back".
+- **Take me there**: from an open book, a find is followed as a link of the book (`followTo`: an
+  article at its beginning, another book at its start), so Back comes back; from a book only in
+  hand, he leads the way as for what the card finds (`Desk.takeThere`), the book in hand going
+  back.
+- **In a headset** (`HereVR`): his buttons are one panel with no ground of its own, "Also in the
+  library" above "Mentioned here": at the end of an open book's toolbar, and with a closed book
+  in hand "Also in the library" alone, under the book's own panel; his list is then on the
+  book's other side. 1 draw call for each eye while a book is in hand in a headset (before, only
+  while it was open). His voice says the answer.
+- **Not measured on a real collection.** The demo set has no such links, and nothing else here
+  has: over its 19 books and the 456 of Project Gutenberg's class M (music, another site's file,
+  read only) against the demo set's six Wikipedias, one article is offered, *Lewis Carroll* in
+  Mathematics for "Songs From Alice in Wonderland and Through the Looking-Glass", as an article
+  of the author's name (its opening names his other books, not that one). How often an article
+  offered as on an author or on a book is the right one is to be counted on a collection that
+  has many: `node tools/librarian-also.mjs --dir <folder>… [--books 200|all] [--articles n]
+  [--out <file>]` prints, per library, the books with each kind of find, and keeps every article
+  offered with how it opens, to read by hand.
+- **Tests.** `test/client-librarian-also.test.js`: words, runs of them, an article's opening and
+  a list of names; a title sought and named; whose an article is; whose a book is and which are
+  one work; his answer for a book (the four kinds, another name and a fuller name, the word's
+  article passed over, two authors of one name, a name only, no author, a Wikipedia indexing or
+  failing or too slow, one search for a title's forms and the forms asked by name where they are
+  cut off, nowhere else to look) and from an article (a writer's books, the book itself, neither,
+  the volume not open); a find's lines, and a find taken as a link or as a search's result.
+  `test/librarian-also-zim.test.js` runs the same over ZIM files written for it
+  (`test/helpers/also-fixtures.js`: two Gutenberg files, a Wikisource, two Wikipedias), read as
+  the server reads them, and the tool over that folder. `test/client-librarian-here-vr.test.js`
+  has the two buttons, a closed book's placement, and the list of either.
+- **Checked** in headless Chrome (2026-11-12) on a server of this checkout's over that set:
+  - On a desktop, "Adventures of Huckleberry Finn" in hand: his button alone in the foot's bar;
+    the list named the article on Mark Twain, the article on the book, the same work in
+    Wikisource, an article of the author's name in the second Wikipedia, and another book of
+    his, in 0.05 s with 7 requests; the same work taken came into hand in the Wikisource. With
+    the book open, both buttons; a turned page left the list, and L (Mentioned here) closed it.
+    The author's article taken was followed as a link; from it he listed 6 books by Mark Twain;
+    one taken, then Backspace twice came back to the article, then to the book at its page.
+    Sapir's *Language* got "Language (Sapir book)", not "Language"; "Beowulf" the Wikisource's;
+    one of two John Smiths nothing; "Poems" by a name only "an article called …".
+  - In the text view both buttons were in its toolbar, the list over the text; the author's
+    article taken showed in the text view, and its Back brought the book back.
+  - On a phone (375 × 812) the bar wrapped to two rows with the book open, the list above them,
+    nothing wider than the screen.
+  - On a TV (`?tv=emulate`, 960 × 540): with a book in hand, Menu, ↓ four times to the button,
+    OK: the list, its first find focused; Back closed it. With the book open the foot's second
+    row had both buttons under the hint; a find taken was followed, and Back (the browser's, as
+    the TV app takes it) came back to the book.
+  - In the VR emulator: with the book in hand his button under the book's panel (82 draw calls
+    for both eyes, 80 with him hidden, 82 with the list open); the trigger on it: his list left
+    of the book, in 0.12 s, his code taking 12 ms of the page's thread, and he said the answer;
+    a row taken by the trigger brought the Wikisource's copy into hand. With the book open, both
+    buttons by the toolbar; the author's article by the trigger, and B back. A still stretch
+    with the book in hand: nothing allocated by his code.
+  - Over the demo set: "I see nothing else in the library on this book or its author." in 0.1 s
+    with 12 searches (two of each Wikipedia); from an article, the same with none.
+  - axe found nothing with the list open, on a desktop (a book in hand, a book open), in the
+    text view, on a phone or on a TV.

@@ -295,10 +295,12 @@ function within(promise, ms) {
  */
 
 /**
- * @typedef {{ kind: 'book', book: any, lib: any } | { kind: 'article', article: any, lib: any, mention?: { text: string, context: string } } | { kind: 'text', hit: any, lib: any }} SearchFind
+ * @typedef {{ kind: 'book', book: any, lib: any, also?: string } | { kind: 'article', article: any, lib: any, mention?: { text: string, context: string }, also?: string } | { kind: 'text', hit: any, lib: any }} SearchFind
  *   something a search found: a book, an article of a Wikipedia (search.js findArticles), or a
  *   place in a book's text (findInText). An article the open pages name (experiment 3: here.js)
- *   has its `mention`: the words as the page has them, and the words round them
+ *   has its `mention`: the words as the page has them, and the words round them. What the library
+ *   also has on the book in hand (also.js) has its `also`: what it is to that book ('author',
+ *   'title', 'same', …)
  */
 
 /**
@@ -490,8 +492,13 @@ export async function ask(text, library) {
  * @returns {{ title: string, line: string, snippet: Array<[string, boolean]> | null }}
  */
 export function findLines(find, multi) {
+  // What the library also has on the book in hand (also.js): what it is to that book, under it.
+  const also = (find.kind === 'book' || find.kind === 'article') && find.also ? ALSO[find.also] ?? null : null;
   if (find.kind === 'book') {
-    return { title: String(find.book.title ?? ''), line: [find.book.author, multi ? find.lib.title : null].filter(Boolean).join(' · '), snippet: null };
+    return {
+      title: String(find.book.title ?? ''), line: [find.book.author, multi ? find.lib.title : null].filter(Boolean).join(' · '),
+      snippet: also ? [[also, false]] : null,
+    };
   }
   if (find.kind === 'article') {
     const { title, from, book } = find.article;
@@ -500,7 +507,7 @@ export function findLines(find, multi) {
     const said = find.mention;
     const at = said ? said.context.indexOf(said.text) : -1;
     /** @type {Array<[string, boolean]> | null} */
-    let snippet = null;
+    let snippet = also ? [[also, false]] : null;
     if (said && at < 0) snippet = [[said.context, false]];
     else if (said) {
       let before = said.context.slice(0, at);
@@ -520,6 +527,20 @@ export function findLines(find, multi) {
   }
   return { title: String(find.hit.title ?? ''), line: [find.hit.author, find.lib.title].filter(Boolean).join(' · '), snippet: find.hit.snippet ?? null };
 }
+
+/**
+ * What a find is to the book in hand ("Also in the library", also.js), as the line under it says.
+ * @type {Record<string, string>}
+ */
+export const ALSO = {
+  author: 'About its author',
+  name: 'An article of the author’s name',
+  title: 'About this book',
+  same: 'The same work',
+  other: 'By the same author',
+  itself: 'The book this article is about',
+  by: 'By the writer this article is about',
+};
 
 /** How much of a passage a find shows: two lines of the card, or of his panel's list. */
 const PASSAGE_SHOWN = 240;

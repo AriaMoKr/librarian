@@ -6,7 +6,7 @@ vrlbry's main: AriaMoKr/librarian, with a site of its own, <https://ariamokr.git
 try on its own.
 
 **Built so far** (SPEC §5.10): experiment 1, all four steps, experiment 2's first three, and
-experiment 3's steps 1, 2 and 4.
+experiment 3, all four steps.
 - **The words, in the library card:** a question becomes a search, then an answer with what it
   found, and *Take me there* goes to it as the search's results do. It works on a desktop (L), a
   phone and a TV.
@@ -78,10 +78,27 @@ experiment 3's steps 1, 2 and 4.
   a panel of its own (his desk's closes as it opens), and the button to ask is one draw call for
   each eye while a book is read in a headset.
 
-Next: experiment 3's step 3, "Also in the library" for the book in hand. Experiment 2's step 4
-(whether the Pages site can talk to a visitor's own Ollama directly) waits on a test of its own,
-not run yet. His reading and "Mentioned here" in VR have been checked with the emulator only, not
-yet on a Quest itself.
+- **Experiment 3, step 3: "Also in the library".** With a book in hand, open or not, a second
+  button of his tells what the other libraries have on it: the article on its author, the
+  article on the book itself, the same work in another library (Gutenberg and Wikisource, or two
+  Gutenberg files), and the author's other books there. From a Wikipedia's article on a writer
+  or a book: the books themselves. An article is offered as theirs only where it shows it is: an
+  author's when it names a book of theirs, gives their fuller name or has three names spelled
+  out; a book's when its title names the author or its first paragraph names them and says it
+  is a book, a novel, a poem. So "Language" is not offered for Sapir's *Language*, nor a page
+  that lists the John Smiths for one of them. An article of the author's name that shows nothing
+  is offered as just that, and he says he cannot tell it is the same person. From an open book a
+  find is followed as a link, so Back comes back; from a book only in hand he leads the way. In
+  VR the button is under the book's own panel, or above *Mentioned here* by an open book's
+  toolbar. The demo set has no such links, so there he says he sees nothing else; it was checked
+  on a small set of ZIM files written for it, and how often it is right on a real collection is
+  still to be counted (`tools/librarian-also.mjs`).
+
+Next: nothing of experiment 3 is left but its "later" (looser connections with experiment 2's
+model). Experiment 2's step 4 (whether the Pages site can talk to a visitor's own Ollama directly)
+waits on a test of its own, not run yet. His reading, "Mentioned here" and "Also in the library"
+in VR have been checked with the emulator only, not yet on a Quest itself; and "Also in the
+library" has not been counted on a real collection, since none here has such links.
 
 The model is the Librarian of Neal Stephenson's *Snow Crash* (1992): a daemon who fronts a vast
 library in the Metaverse, appears as a pleasant silver-haired man in a sweater and tie, and finds,
@@ -155,8 +172,8 @@ This makes the separate ZIMs feel like one library.
   open pages name, each a *Take me there* that brings the article into your hands, with Back
   bringing your book back at your page (built, on a screen); 3. "Also in the library", for the book in hand: its
   author's article, its own, the same work in another library and the author's other books
-  (nothing in the demo set: it shows with bigger collections); 4. in VR and aloud (built: his
-  button by the book's toolbar, his panel beside the pages, his voice; the titles in a worker).
+  (built; nothing in the demo set: it shows with bigger collections); 4. in VR and aloud (built:
+  his buttons by the book, his panel beside it, his voice; the titles in a worker).
 - **Later**: looser connections with experiment 2's model, which could also tell one sense from
   another where the rule holds a match back.
 

@@ -45,7 +45,13 @@ The third has begun: with a book open, *Mentioned here* at the foot of the page 
 articles of the other libraries that the open pages name, and *Take me there* brings one into your
 hands; Back brings your book back at your page. In VR the button is at the end of the book's
 toolbar and the list on a panel of his beside the pages, and with his voice chosen he says the
-answer, naming the articles. He goes by a rule, not a guess. The words must be
+answer, naming the articles. And with a book in hand, open or not, *Also in the library* tells
+what the other libraries have on it: the article on its author, the article on the book itself,
+the same work in another library, and the author's other books there; from an article on a writer
+or a book, the books themselves. An article is offered as theirs only where it shows it is (it
+names a book of theirs, or says it is a book by that author): *Language* is not the article on
+Sapir's book of that name. The website's libraries have no such links, so it shows with a larger
+collection of your own. He goes by a rule, not a guess. The words must be
 the article's title as written, two words or more, and the page must show which sense it means,
 by writing them as a name or by naming another article of the same library within a few lines:
 "large numbers of bats" is not mathematics' *Large numbers*. Read by hand over the website's
@@ -223,6 +229,7 @@ Then press **Enter VR**.
 | Ask the librarian | **L**, click him (beside the catalogue stand), or the box in the card | tap him, or the box in the card | aim the crosshair at him, **A**: the box in the card | point at him and pull the trigger: his panel |
 | There at once, while he leads the way | a click, Enter or Esc | a tap | **A** | the trigger |
 | What the open pages mention | **L**, or *Mentioned here* at the foot of the page | *Mentioned here* at the foot of the page | – | *Mentioned here* at the end of the book's toolbar |
+| What else the library has on the book in hand | *Also in the library* at the foot of the page | *Also in the library* at the foot of the page | – | *Also in the library* under the book's panel, or at the end of an open book's toolbar |
 | Read | click the book or **Read** | tap **Read** | **A** | trigger on the book, or **A** |
 | Turn pages | ← → Space, or click a page | swipe, or tap a page | bumpers, or D-pad ← → | flick the right stick, or trigger on a page |
 | Text size, theme, contents | + / − · **N** · **C**, or the toolbar | toolbar | D-pad ↑ ↓ · **Y** · **X** | toolbar |

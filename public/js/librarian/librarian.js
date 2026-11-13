@@ -27,15 +27,23 @@
 //   them, in a worker (xref-worker.js). In a headset the button is by the book's toolbar and the
 //   list on his panel beside the pages (here-vr.js); with his voice chosen he says the answer,
 //   naming the articles.
+// - "Also in the library" (experiment 3): a second button of his, there whenever a book is in
+//   hand, open or not: the article on its author, the article on the book, the same work in
+//   another library and the author's other books there; from a Wikipedia's article, the books
+//   themselves (also.js). What he finds is taken as "Mentioned here"'s finds are while the book
+//   is open (as a link, so Back comes back), and with his walk while it is only in hand.
 // Experiment 1: step 1, the words in the card; step 2, the figure and his panel; step 3, the walk;
 // step 4, his voice. Experiment 2: step 2, his reading in the card; step 3, on his panel and aloud.
-// Experiment 3: step 2, "Mentioned here" on a screen; step 4, in a headset and aloud.
+// Experiment 3: step 2, "Mentioned here" on a screen; step 4, in a headset and aloud; step 3,
+// "Also in the library".
 
-import { findText, getBookMeta, getChunk } from '../api.js';
+import { findText, getBookMeta, getChunk, searchArticles } from '../api.js';
 import * as local from '../local/local.js';
+import { currentRef, isPage } from '../reader/spreads.js';
 import { bookIndex, findArticles, findInText } from '../search.js';
 import { fileName } from '../util/file-names.js';
 import { load, save } from '../util/storage.js';
+import { lookAlso } from './also.js';
 import { ask, MAX_FINDS, parseQuestion } from './ask.js';
 import { FAILED, LibrarianCard } from './card.js';
 import { Desk } from './desk.js';
@@ -58,17 +66,23 @@ const SITE = new URL('../../', import.meta.url);
 /**
  * Takes the visitor to a find, as the search's results do: a book to its shelf and into their
  * hands (interaction.searchPick), an article's volume open at it (openArticle), a book open where
- * its text holds the words (openText); a place he read, its book open there (openAt). An article
- * the open pages name (its `mention`) is followed as a link of theirs is (followTo): Back brings
- * the book back at its page.
+ * its text holds the words (openText); a place he read, its book open there (openAt). What the
+ * open book led to (an article its pages name: its `mention`; what the library also has on it:
+ * its `also`) is followed as a link of the book is (followTo): Back brings the book back at its
+ * page.
  * @param {{ state?: string, searchPick: Function, openArticle: Function, openText: Function, openAt: Function, followTo?: Function }} interaction
  * @param {import('./ask.js').Find} find
  */
 export function takeThere(interaction, find) {
-  if (find.kind === 'book') return interaction.searchPick(find.book, { take: true });
+  const reading = interaction.state === 'read' && !!interaction.followTo;
+  if (find.kind === 'book') {
+    // Another book the open one led to, at its beginning (one with no text to read is only taken out).
+    if (find.also && reading && find.book.readable !== false) return interaction.followTo?.({ libId: find.lib.id, id: find.book.id, at: { c: 0, b: 0 } });
+    return interaction.searchPick(find.book, { take: true });
+  }
   if (find.kind === 'article') {
-    if (find.mention && interaction.state === 'read' && interaction.followTo) {
-      return interaction.followTo({ libId: find.lib.id, id: find.article.book, at: { c: find.article.n, b: 0 } });
+    if ((find.mention || find.also) && reading) {
+      return interaction.followTo?.({ libId: find.lib.id, id: find.article.book, at: { c: find.article.n, b: 0 } });
     }
     return interaction.openArticle(find.lib.id, find.article.book, find.article.n);
   }
@@ -249,35 +263,85 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     tv,
     presenting: () => !!interaction.controls?.presenting,
   });
-  // In a headset (step 4): his button by the book's toolbar, and his panel beside the pages with
-  // the same answer and finds; his desk's panel closes as it opens, one of his panels at a time.
-  const beside = new HereVR({ interaction, here, speech, onOpen: () => desk.close() });
-  here.onLooking = () => {
-    speech.stop(); // asked again: the last answer stops
-    beside.refresh();
+  // "Also in the library" (experiment 3 step 3), with a book in hand, open or not: what the other
+  // libraries have on it (also.js). What it is asked of is the book in hand, and of a Wikipedia's
+  // volume the article it is open at too: a new value only as either changes, since it is asked
+  // each frame (the list closes as it changes).
+  /** @type {{ book: unknown, part: number } | null} */
+  let alsoOf = null;
+  /** The article a Wikipedia's volume is open at (its chunk), -1 for none. @param {any} book */
+  const partOf = (book) => {
+    const ref = book?.volume ? currentRef(interaction.spreadShown) : null;
+    return isPage(ref) ? /** @type {{ c: number }} */ (ref).c : -1;
   };
-  here.onStep = () => beside.refresh();
-  here.onAnswer = (answer) => {
-    // Said as his answers are, once chosen, the articles named (here.js: `said`); the list closed
-    // (a page turned, an article taken), he stops.
-    if (answer && speech.on()) speech.say(answer.said ?? answer.text);
-    else if (!answer) speech.stop();
-    beside.refresh();
-  };
-  // The button where the book is read: in the bar at the page's foot, after "Text view", or in the
-  // text view's toolbar while that is open (the foot's bar is under it), the list over that view.
+  /** A pause for the view's frames between slices of reading an article, in a headset. */
+  const breathe = () => new Promise((/** @type {(value?: void) => void} */ resolve) => {
+    setTimeout(resolve, 0);
+  });
+  const also = new HerePanel({
+    label: 'Also in the library', hint: 'What the other libraries have on this book and its author', id: 'lb-also', also: true,
+    look: async ({ onStep }) => {
+      const { libraries, booksByLib } = catalogue();
+      const book = interaction.book;
+      if (!book) return { text: 'No book is in hand.', finds: [], search: null };
+      const c = partOf(book);
+      const article = c >= 0 ? { title: String(interaction.reader?.meta?.toc?.[c]?.title ?? ''), blocks: await getChunk(book.libId, book.id, c) } : null;
+      return lookAlso({
+        book, article, libraries, onStep,
+        index: () => bookIndex(libraries, booksByLib),
+        articles: (lib, q, limit) => searchArticles(lib.id, q, limit),
+        blocksOf: (lib, id, n) => getChunk(lib.id, id, n),
+        breathe: interaction.controls?.presenting ? breathe : null,
+      });
+    },
+    pages: () => {
+      const book = interaction.book ?? null;
+      if (!book) return null;
+      const part = partOf(book);
+      if (!alsoOf || alsoOf.book !== book || alsoOf.part !== part) alsoOf = { book, part };
+      return alsoOf;
+    },
+    // From an open book, as a link of its (Back comes back); from one only in hand, he leads the
+    // way as for what the card finds.
+    take: (find) => (interaction.state === 'read' ? take(find) : desk.takeThere(find)),
+    tv,
+    presenting: () => !!interaction.controls?.presenting,
+  });
+  // In a headset (step 4): his buttons by the book, and his panel beside it with the same answer
+  // and finds; his desk's panel closes as it opens, one of his panels at a time.
+  const beside = new HereVR({ interaction, here, also, speech, onOpen: () => desk.close() });
+  // One of the two lists at a time; each tells his panel in a headset, and his voice.
+  for (const [asked, other] of /** @type {Array<[HerePanel, HerePanel]>} */ ([[here, also], [also, here]])) {
+    asked.onLooking = () => {
+      other.close();
+      speech.stop(); // asked again: the last answer stops
+      beside.refresh();
+    };
+    asked.onStep = () => beside.refresh();
+    asked.onAnswer = (answer) => {
+      // Said as his answers are, once chosen (the articles the pages name, named: here.js
+      // `said`); the list closed (a page turned, a find taken), he stops.
+      if (answer && speech.on()) speech.say(answer.said ?? answer.text);
+      else if (!answer) speech.stop();
+      beside.refresh();
+    };
+  }
+  // The buttons where the book is: in the bar at the page's foot, after "Text view", or in the
+  // text view's toolbar while that is open (the foot's bar is under it), the lists over that view.
   const foot = overlay.root.querySelector('.ov-bottom');
   const placeHere = (/** @type {boolean} */ inText) => {
     const view = inText ? interaction.textView?.el : null;
     const bar = view?.querySelector('.tv-bar');
-    if (view && bar) here.place(bar, view, bar.querySelector('.tv-putback'));
-    else if (foot) here.place(foot, overlay.root, foot.querySelector('.ov-vr'));
+    for (const asked of [here, also]) {
+      if (view && bar) asked.place(bar, view, bar.querySelector('.tv-putback'));
+      else if (foot) asked.place(foot, overlay.root, foot.querySelector('.ov-vr'));
+    }
   };
   let inText = false;
   placeHere(false);
-  // Each frame (nothing made): the button follows the text view, the list closes as the pages it
-  // was asked of go (a turned page, a link followed, the book put back), and in a headset his
-  // button and panel are where the book is.
+  // Each frame (nothing made): the buttons follow the text view, a list closes as what it was
+  // asked of goes (a turned page, a link followed, the book put back), and in a headset his
+  // buttons and panel are where the book is.
   interaction.onFrame?.(() => {
     const text = !!interaction.textView?.isOpen;
     if (text !== inText) {
@@ -285,11 +349,12 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
       placeHere(text);
     }
     here.sync();
+    also.sync();
     beside.update();
   });
 
   // For the console and scripted checks: __vrlbry.interaction.librarian.
-  interaction.librarian = { card, desk, voice, model, here, shelf, beside };
+  interaction.librarian = { card, desk, voice, model, here, also, shelf, beside };
   // Out of VR his panel goes: on a screen the card is his.
   interaction.renderer?.xr?.addEventListener?.('sessionend', () => desk.close());
 
@@ -303,6 +368,7 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
     card.setShown(on);
     desk.setShown(on);
     here.setShown(on);
+    also.setShown(on);
     beside.setShown(on);
   };
   box.checked = prefs.shown !== false;
@@ -421,12 +487,13 @@ export function startLibrarian({ overlay, interaction, tv = false }) {
   // The question, its answer and his panel in the page's state: debug reports and scenes
   // (overlay.uiState). The panel comes back only in a headset.
   overlay.addUiPart?.('librarian', {
-    state: () => ({ ...card.uiState(), ...desk.uiState(), ...(here.open ? { here: true } : {}) }),
+    state: () => ({ ...card.uiState(), ...desk.uiState(), ...(here.open ? { here: true } : {}), ...(also.open ? { also: true } : {}) }),
     restore: (/** @type {any} */ ui) => {
       card.restoreUi(ui);
       if (ui?.panel && interaction.controls?.presenting) desk.open();
       // "Mentioned here", where its book is open again already.
       if (ui?.here && interaction.spreadShown) here.ask();
+      else if (ui?.also && interaction.book) also.ask();
     },
   });
   return { card, desk };

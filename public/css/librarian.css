@@ -42,7 +42,15 @@
    too (its z-index is 3), as the toasts are. */
 .ov-bottom .lb-here-btn { height: 42px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--accent); font-weight: 600; white-space: nowrap; backdrop-filter: blur(8px); }
 .ov-bottom .lb-here-btn[aria-expanded="true"] { background: var(--accent); color: #24170a; }
-#overlay:not(.ov-reading) .lb-here-btn, #overlay:not(.ov-reading) .lb-here { display: none; }
+#overlay:not(.ov-reading) .lb-here-btn:not(.lb-also-btn), #overlay:not(.ov-reading) .lb-here:not(.lb-also) { display: none; }
+/* "Also in the library" (step 3): a second such button and list, there whenever a book is in hand,
+   open or not. With both buttons the bar is wider than a phone held upright, so with a book out
+   it wraps (a TV's does already), its rows in the middle, or at the right while reading as the
+   bar is; the list stands above it however many rows that is (here-panel.js _lift). */
+#overlay:not(.ov-bookout) .lb-also-btn, #overlay:not(.ov-bookout) .lb-also { display: none; }
+html:not(.tv) #overlay.ov-bookout .ov-bottom { flex-wrap: wrap; justify-content: center; row-gap: 8px; width: max-content;
+  max-width: calc(100vw - 2 * max(12px, env(safe-area-inset-right))); }
+html:not(.tv) #overlay.ov-reading .ov-bottom { justify-content: flex-end; }
 .lb-here { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: calc(max(18px, env(safe-area-inset-bottom)) + 54px); z-index: 4;
   width: min(400px, calc(100vw - 32px)); max-height: min(62vh, 540px); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-solid); color: var(--text); font: 15px/1.45 var(--font);
@@ -81,8 +89,9 @@ html.tv :is(.lb-q, .lb-answer, .lb-find-title) { font-size: 18px; }
 html.tv :is(.lb-find-line, .lb-find-snip, .lb-find-go, .lb-go, .lb-step) { font-size: 16px; }
 html.tv .lb-cite { font-size: 13px; }
 html.tv .lb-num { font-size: 17px; }
-/* "Mentioned here": with his button the foot's row of a book's buttons wraps to a second on a
-   960 px screen, so the remote's hint stands above both rows, and his list above the hint. */
+/* "Mentioned here" and "Also in the library": with his buttons the foot's row of an open book's
+   buttons wraps to a second on a 960 px screen, so the remote's hint stands above both rows, and
+   his list above the hint. A book in hand has fewer buttons: one row. */
 html.tv #overlay.ov-reading:focus-within:has(.ov-bottom .lb-here-btn:not([hidden])) .ov-hint { bottom: calc(var(--tv-edge-y) + 104px); }
 html.tv .lb-here { left: 50%; right: auto; transform: translateX(-50%); bottom: calc(var(--tv-edge-y) + 150px); width: min(560px, calc(100vw - 2 * var(--tv-edge-x)));
   max-height: calc(100vh - 2 * var(--tv-edge-y) - 150px); font-size: 18px; }

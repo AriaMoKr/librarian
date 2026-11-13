@@ -63,7 +63,7 @@ const HELP = {
     ['Book out of sight', 'F, or “Bring the book in front of me” below'],
     ['Back to the start', 'Home, or “Reset view” below'],
     ['Search', 'The box at the top, or type on the catalogue stand’s Search tab (Esc to stop typing)'],
-    ['Ask the librarian', 'L, click him beside the catalogue stand, or the box in the card: a title, an author or a subject · “Take me there”: he leads you to what he found (a click, Enter or Esc: there at once) · with a book open, L or “Mentioned here”: the articles of the other libraries that its pages name (Backspace: back to your page)'],
+    ['Ask the librarian', 'L, click him beside the catalogue stand, or the box in the card: a title, an author or a subject · “Take me there”: he leads you to what he found (a click, Enter or Esc: there at once) · with a book open, L or “Mentioned here”: the articles of the other libraries that its pages name (Backspace: back to your page) · with a book in hand or open, “Also in the library”: what the other libraries have on it and its author'],
   ],
   touch: [
     ['Look around', 'Drag with one finger'],
@@ -74,7 +74,7 @@ const HELP = {
     ['Text view', '“Text view” at the foot while reading: the part as a page of text'],
     ['Put it back', 'Tap “Put back”'],
     ['Book out of sight', '“Bring the book in front of me” below'],
-    ['Ask the librarian', 'Tap him beside the catalogue stand, or the box in the card: a title, an author or a subject · tap what he found and he leads you there (tap again: there at once) · with a book open, “Mentioned here” at the foot: the articles of the other libraries that its pages name (“↩ Back”: back to your page)'],
+    ['Ask the librarian', 'Tap him beside the catalogue stand, or the box in the card: a title, an author or a subject · tap what he found and he leads you there (tap again: there at once) · with a book open, “Mentioned here” at the foot: the articles of the other libraries that its pages name (“↩ Back”: back to your page) · with a book in hand or open, “Also in the library”: what the other libraries have on it and its author'],
   ],
   gamepad: [
     ['Look around', 'Right stick'],
@@ -92,7 +92,7 @@ const HELP = {
     ['Take a book', 'Turn until the dot is on it, then OK'],
     ['Read', 'OK · turn the pages with ← →'],
     ['The card', 'Menu: this card, on the librarian’s Ask first (else on this button), and with a book out its buttons (contents, text view, theme, pages, text size) · ↑ ↓ from one to the next, ← → through a choice, OK presses'],
-    ['The librarian', 'OK with the dot on him beside the stand, or ↑ from Ask: his box, OK to type with the keyboard, its search key asks · ↓ through what he found, OK and he leads you there (OK again: there at once) · with a book open, Menu, then “Mentioned here”: the articles of the other libraries that its pages name (Back: back to your page)'],
+    ['The librarian', 'OK with the dot on him beside the stand, or ↑ from Ask: his box, OK to type with the keyboard, its search key asks · ↓ through what he found, OK and he leads you there (OK again: there at once) · with a book open, Menu, then “Mentioned here”: the articles of the other libraries that its pages name (Back: back to your page) · with a book in hand or open, Menu, then “Also in the library”: what the other libraries have on it and its author'],
     ['Search', '↑ from this button to the box, OK to type with the keyboard · ↓ through the results, OK opens one · Back: the box again'],
     ['A list on the stand', 'Walk up to the stand, the dot on the list: ↑ ↓ scroll it, OK chooses'],
     ['The text view', '↑ ↓ scroll it, ← → turn the pages · OK: the links on the screen · Menu: its toolbar'],
@@ -108,7 +108,7 @@ const HELP = {
     ['Close / put back', 'B or Y button'],
     ['Book out of sight', 'Press a thumbstick: it comes in front of you'],
     ['Leave VR', 'Hold B or Y for a second while browsing, or “Exit VR” on the catalogue stand'],
-    ['Ask the librarian', 'Point at him beside the catalogue stand, pull the trigger: type on his panel, Ask · “Take me there”: he leads you to what he found (the trigger: there at once) · “Voice” on his panel: he says his answers · with a book open, “Mentioned here” at the end of its toolbar: the articles of the other libraries that its pages name, beside the pages (B or Y: back to your page)'],
+    ['Ask the librarian', 'Point at him beside the catalogue stand, pull the trigger: type on his panel, Ask · “Take me there”: he leads you to what he found (the trigger: there at once) · “Voice” on his panel: he says his answers · with a book open, “Mentioned here” at the end of its toolbar: the articles of the other libraries that its pages name, beside the pages (B or Y: back to your page) · “Also in the library”, there or under the panel of a book in hand: what the other libraries have on it and its author'],
   ],
 };
 
