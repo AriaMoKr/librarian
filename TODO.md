@@ -517,6 +517,25 @@
   the other date reads anew. To decide: dates within a minute or so as one edition (a deploy
   takes minutes, a new edition at a mirror's address comes days later), or the site's own files
   checked by size alone (each deploy uploads the same bytes).
+- **Kiwix's newer Gutenberg files (papers2zim)** (reported 2026-11-12; read since the same day,
+  SPEC §2.2). Kiwix's first, `gutenberg_af_all_2026-11.zim` (17 books, `zim/books/`), opened as
+  a generic library of 86 "books" by "gutenberg.org", each starting with three icons; it is now a
+  Gutenberg library like the older files, its books' ids their Gutenberg numbers. Open:
+  - *A long list from the web.* A list page holds 500 books with their descriptions (12.7 KB of
+    JSON for 17, ~745 bytes a book, against ~100 a row of the older script); an English file of
+    60,000 books would be ~120 pages, ~45 MB before compression, read before its first room
+    shows. Measure once one is published (the older `gutenberg_en_all` opened from the web in
+    about 10 s).
+  - *Not read yet:* a book's own JSON has a subtitle that is not in its title ("Met tekeninge van
+    J.H. Pierneef"), its licence and its author's years and portrait; the entries' descriptions.
+  - *The demo set's file.* `gutenberg_en_lcc-p_2026-03.zim` is in the old form; once Kiwix
+    replaces the English files it may leave the mirror. Since 2026-11-12 vrlbry keeps a copy
+    (Kiwix's SHA-256, as GitHub reports it) in its release "demo-set", which its Pages build
+    downloads when the mirror no longer has the file; this repository has no such release yet
+    (the user's call). Open: the card's example (`EXAMPLE_ZIM`, local/local.js) reads the same
+    file from the mirror and links its download, so when the file goes the example needs another
+    one; a page cannot read a release's copy (github.com's redirect to it sends no CORS headers,
+    and a preflight gets 404).
 - **All-libraries hall draw calls.** On the Quest: 380 → 104 standing (both eyes), 142 → 56
   walking, with one draw call per sign and no books drawn behind a nearer row. The room itself
   (chandeliers, walls, wainscots, ~31 calls per eye) could still be merged per material.
