@@ -3,7 +3,9 @@
 // Wikisource, two Wikipedias), its catalogue, its articles found by their titles and other names,
 // and its articles' blocks as the converter makes them. The same answers as with a library made
 // up in test/client-librarian-also.test.js, so what the looking expects of an article's blocks, a
-// Wikisource's authors and a Wikipedia's titles holds for the real ones.
+// Wikisource's authors and a Wikipedia's titles holds for the real ones. And a Gutenberg file of
+// each form (test/helpers/zim-fixtures.js: gutenberg2zim's, papers2zim's), whose authors' ids are
+// a number and a slug.
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -16,6 +18,7 @@ import { lookAlso, openingOf } from '../public/js/librarian/also.js';
 import { bookIndex } from '../public/js/search.js';
 import { Library } from '../server/library.js';
 import { writeAlsoSet } from './helpers/also-fixtures.js';
+import { writeGutenbergZim, writePapersGutenbergZim } from './helpers/zim-fixtures.js';
 
 describe('"Also in the library" over ZIM files', () => {
   /** @type {string} */
@@ -150,5 +153,50 @@ describe('"Also in the library" over ZIM files', () => {
     assert.ok(offered.some((o) => o.what === 'name' && o.title === 'Ann Nobody'));
     assert.ok(offered.some((o) => o.what === 'itself' && o.article === 'Adventures of Huckleberry Finn'));
     assert.ok(!offered.some((o) => o.title === 'Language' || o.title === 'John Smith'), 'neither the word\'s article nor the list of names');
+  });
+});
+
+describe('"Also in the library" between Gutenberg\'s older and newer files', () => {
+  /** @type {string} */
+  let dir;
+  /** @type {Library} */
+  let folder;
+  /** @type {any[]} */
+  let libraries;
+  /** @type {Record<string, any[]>} */
+  let booksByLib;
+
+  before(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'librarian-also-forms-'));
+    writeGutenbergZim(path.join(dir, 'gutenberg_en_test_2026-01.zim'));
+    writePapersGutenbergZim(path.join(dir, 'gutenberg_af_all_2026-11.zim'));
+    folder = await Library.scan(dir, { cacheDir: path.join(dir, '.cache'), log: () => {}, warn: () => {} });
+    const open = folder.list();
+    libraries = await Promise.all(open.map((l) => l.info()));
+    booksByLib = {};
+    for (const l of open) booksByLib[l.id] = (await l.books()).map((b) => ({ ...b, libId: l.id }));
+  });
+  after(async () => {
+    await folder?.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('finds one author\'s books both ways, though one file gives the author a number and the other a slug', async () => {
+    const older = libraries.find((l) => l.id.startsWith('gutenberg_en_test'));
+    const newer = libraries.find((l) => l.id.startsWith('gutenberg_af_all'));
+    assert.deepEqual([older.kind, newer.kind], ['gutenberg', 'gutenberg']);
+    const of = (lib, title) => booksByLib[lib.id].find((b) => b.title === title);
+    assert.deepEqual([of(newer, 'Trek Tale').authorId, of(older, 'Alpha/Beta/Gamma').authorId], ['ann-author', '7']);
+    const access = { libraries, index: () => bookIndex(libraries, booksByLib), articles: async () => [], blocksOf: async () => [] };
+    const kinds = (answer) => answer.finds.map((f) => `${f.also} ${f.lib.id === newer.id ? 'newer' : 'older'} ${f.book.author}`);
+    const fromNewer = await lookAlso({ ...access, book: of(newer, 'Trek Tale') });
+    assert.equal(fromNewer.text, 'Also in the library: 5 other books by Ann Author.');
+    assert.deepEqual(new Set(kinds(fromNewer)), new Set(['other older Ann Author']));
+    const fromOlder = await lookAlso({ ...access, book: of(older, 'Alpha/Beta/Gamma') });
+    assert.equal(fromOlder.text, 'Also in the library: 2 other books by Ann Author.');
+    assert.deepEqual(fromOlder.finds.map((f) => f.book.title).sort(), ['Epub Only', 'Trek Tale']);
+    assert.deepEqual(new Set(kinds(fromOlder)), new Set(['other newer Ann Author']));
+    // Bob Writer's, the other way: a number in the older file, a slug in the newer.
+    assert.equal((await lookAlso({ ...access, book: of(newer, 'Op die delwerye') })).text, 'Also in the library: one other book by Bob Writer.');
   });
 });

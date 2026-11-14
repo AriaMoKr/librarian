@@ -3455,14 +3455,20 @@ books themselves (`also.js`, `lookAlso`).
     "Relativity" a theory of Einstein's, no book;
   - a page that only lists what a name may refer to is none (`listsNames`).
   An article's opening is its paragraphs before the first heading under its title (`openingOf`).
-- **Whose a book is** (`sameAuthor`): between two Gutenberg files by Project Gutenberg's own
-  number for the author (`authorId`: two authors of one name have two), else by a name the two
-  share.
+- **Whose a book is** (`sameAuthor`): between two Gutenberg files of one form by the id they give
+  the author (`authorId`: two authors of one name have two; `idKind`), Project Gutenberg's own
+  number in the older files and papers2zim's slug in the newer (§2.2), else by a name the two
+  share. A number and a slug cannot be compared, so between an older file and a newer one the
+  names are: two authors of one name are one there. (A book both forms have, by the same
+  Gutenberg number, could tie a number to a slug: not done. Whether papers2zim gives two authors
+  of one name two slugs is not known yet.)
 - **From a Wikipedia's article** (the volume open at it): the books whose title's form is the
   article's title, where the article shows it is on that book ("the book this article is about"),
   and the books of an author of the article's name, where the article shows it is on that author
-  (each author of that name told apart). It reads only the catalogue and the open article. With
-  the volume not open: "Ask me this at an article: …".
+  (each author of that name told apart: a book joins an author's books only when it is one
+  author's with all of them, compared with the first of each kind of id among them, so a book
+  with no number does not join two John Smiths into one). It reads only the catalogue and the
+  open article. With the volume not open: "Ask me this at an article: …".
 - **What it asks of the libraries**, only once asked, and only where a typed search goes: of each
   Wikipedia (not one still being indexed) a search by each of the author's names until an article
   shows it is theirs, and one by the title, which finds its forms among what begins with it (the
@@ -3507,15 +3513,18 @@ books themselves (`also.js`, `lookAlso`).
   [--out <file>]` prints, per library, the books with each kind of find, and keeps every article
   offered with how it opens, to read by hand.
 - **Tests.** `test/client-librarian-also.test.js`: words, runs of them, an article's opening and
-  a list of names; a title sought and named; whose an article is; whose a book is and which are
-  one work; his answer for a book (the four kinds, another name and a fuller name, the word's
-  article passed over, two authors of one name, a name only, no author, a Wikipedia indexing or
-  failing or too slow, one search for a title's forms and the forms asked by name where they are
-  cut off, nowhere else to look) and from an article (a writer's books, the book itself, neither,
-  the volume not open); a find's lines, and a find taken as a link or as a search's result.
-  `test/librarian-also-zim.test.js` runs the same over ZIM files written for it
-  (`test/helpers/also-fixtures.js`: two Gutenberg files, a Wikisource, two Wikipedias), read as
-  the server reads them, and the tool over that folder. `test/client-librarian-here-vr.test.js`
+  a list of names; a title sought and named; whose an article is; whose a book is (by a number,
+  by a slug, by name between the two) and which are one work; his answer for a book (the four
+  kinds, another name and a fuller name, the word's article passed over, two authors of one name,
+  a name only, no author, a Wikipedia indexing or failing or too slow, one search for a title's
+  forms and the forms asked by name where they are cut off, nowhere else to look, Gutenberg's
+  older and newer files both ways) and from an article (a writer's books, two writers of one name
+  with a book of neither's number first, the book itself, neither, the volume not open); a find's
+  lines, and a find taken as a link or as a search's result. `test/librarian-also-zim.test.js`
+  runs the same over ZIM files written for it (`test/helpers/also-fixtures.js`: two Gutenberg
+  files, a Wikisource, two Wikipedias), read as the server reads them, and the tool over that
+  folder; and over a Gutenberg file of each form (`writeGutenbergZim`,
+  `writePapersGutenbergZim`), one author's books found both ways. `test/client-librarian-here-vr.test.js`
   has the two buttons, a closed book's placement, and the list of either.
 - **Checked** in headless Chrome (2026-11-12) on a server of this checkout's over that set:
   - On a desktop, "Adventures of Huckleberry Finn" in hand: his button alone in the foot's bar;

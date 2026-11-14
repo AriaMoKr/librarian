@@ -17,9 +17,11 @@
 // - An article of the book's title is on the book when its title names the author ("Language
 //   (Sapir book)"), or its first paragraph names the author and says it is a book, a novel, a poem
 //   and the like: "Language" alone is the article on language, and "Relativity" the theory.
-// - Books are another's by their author's name, as each library writes it (Project Gutenberg's
-//   own number for an author tells two of one name apart between its files), and the same work by
-//   the same title and volume as well.
+// - Books are another's by their author's name, as each library writes it, and the same work by
+//   the same title and volume as well. Between two Gutenberg files of one form the id they give
+//   the author tells two of one name apart: Project Gutenberg's own number in the older files,
+//   papers2zim's slug in the newer. A number and a slug cannot be compared, so between an older
+//   file and a newer one the names are.
 // What it looks up goes where a typed search goes: the libraries' articles by their titles (a few
 // names and forms of a title), the articles found (read to see whose they are), and the
 // catalogue's books, which the page has. Pure but for what it is given (tested in Node); English.
@@ -308,15 +310,38 @@ function namesOf(author) {
 }
 
 /**
- * Whether two books are one author's: by Project Gutenberg's own number for the author between
- * two of its files (two authors of one name have two), else by a name they share.
+ * An author's id in Gutenberg's older files: Project Gutenberg's own number ("53"). Kiwix's newer
+ * files (papers2zim, SPEC §2.2) give a slug instead ("mark-twain").
+ */
+const NUMBERED = /^\d+$/;
+
+/**
+ * The id a Gutenberg file gives a book's author, else null.
+ * @param {{ book: Book, lib: Lib }} x
+ */
+const gutenbergAuthor = (x) => (x.lib.kind === 'gutenberg' && x.book.authorId != null && x.book.authorId !== '' ? String(x.book.authorId) : null);
+
+/**
+ * The kind of id a book's author has: 'number' (Gutenberg's older files), 'slug' (its newer) or
+ * '' (none: another library's book, or no author's id).
+ * @param {{ book: Book, lib: Lib }} x
+ */
+export function idKind(x) {
+  const id = gutenbergAuthor(x);
+  return id === null ? '' : NUMBERED.test(id) ? 'number' : 'slug';
+}
+
+/**
+ * Whether two books are one author's: by the id two Gutenberg files give the author where both
+ * give one of a kind, Project Gutenberg's number in the older files or papers2zim's slug in the
+ * newer (two authors of one name have two); else by a name they share. A number and a slug cannot
+ * be compared, so between an older file and a newer one the names are.
  * @param {{ book: Book, lib: Lib }} x
  * @param {{ book: Book, lib: Lib }} y
  */
 export function sameAuthor(x, y) {
-  if (x.lib.kind === 'gutenberg' && y.lib.kind === 'gutenberg' && x.book.authorId != null && y.book.authorId != null) {
-    return String(x.book.authorId) === String(y.book.authorId);
-  }
+  const kind = idKind(x);
+  if (kind !== '' && kind === idKind(y)) return gutenbergAuthor(x) === gutenbergAuthor(y);
   const a = namesOf(x.book.author);
   const b = namesOf(y.book.author);
   return a.some((n) => b.includes(n));
@@ -578,18 +603,25 @@ async function fromArticle({ book, article = null, libraries, index, breathe = n
       if (titleForms(e.book).some((form) => wordKey(form) === titleKey) && showsBook(title, opening, surnameOf(e.book.author))) itself.push(e);
     }
     // The books of the writer this article is about: theirs by name, each author of that name
-    // told apart, and the article must show it is that one.
+    // told apart, and the article must show it is that one. A book joins an author's books only
+    // when it is one author's with all of them, not only with the first: one with no number to
+    // compare (a Wikisource's, a newer Gutenberg file's) would otherwise join two John Smiths into
+    // one. It is compared with the first of each kind of id among them (idKind), since the others
+    // of that kind have the same id: a writer's hundreds of books are not compared two by two.
     const called = near.filter((e) => namesOf(e.book.author).includes(nameKey));
     if (called.length) {
       const words = await readWords(article.blocks, breathe);
-      /** @type {Entry[][]} */
+      /** @type {{ books: Entry[], firsts: Entry[] }[]} */
       const authors = [];
       for (const e of called) {
-        const group = authors.find((g) => sameAuthor(g[0], e));
-        if (group) group.push(e);
-        else authors.push([e]);
+        const owner = authors.find((g) => g.firsts.every((m) => sameAuthor(m, e)));
+        if (!owner) authors.push({ books: [e], firsts: [e] });
+        else {
+          owner.books.push(e);
+          if (!owner.firsts.some((m) => idKind(m) === idKind(e))) owner.firsts.push(e);
+        }
       }
-      for (const group of authors) {
+      for (const { books: group } of authors) {
         /** @type {Sought[]} */
         const titles = [];
         for (const e of group.slice(0, MOST_TITLES)) {

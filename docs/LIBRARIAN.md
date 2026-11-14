@@ -82,7 +82,10 @@ experiment 3, all four steps.
   button of his tells what the other libraries have on it: the article on its author, the
   article on the book itself, the same work in another library (Gutenberg and Wikisource, or two
   Gutenberg files), and the author's other books there. From a Wikipedia's article on a writer
-  or a book: the books themselves. An article is offered as theirs only where it shows it is: an
+  or a book: the books themselves. Two Gutenberg files of one form tell two authors of one name
+  apart by the id they give them, a number in the older files and a slug in Kiwix's newer ones
+  (papers2zim, from 2026-11); between the two forms, and in other libraries, an author is known
+  by name. An article is offered as theirs only where it shows it is: an
   author's when it names a book of theirs, gives their fuller name or has three names spelled
   out; a book's when its title names the author or its first paragraph names them and says it
   is a book, a novel, a poem. So "Language" is not offered for Sapir's *Language*, nor a page

@@ -3,14 +3,15 @@
 // and what shows that an article is on an author or on a book; whose the catalogue's books are and
 // which are one work; his answer for a book (the articles on its author and on itself, the same
 // work elsewhere, the author's other books), for a work with no author, for two authors of one
-// name, and from a Wikipedia's article (the books themselves); what he asks of the libraries; a
-// find's lines, and a find taken to. The button and its list are checked in a browser.
+// name, between Gutenberg's older and newer files, and from a Wikipedia's article (the books
+// themselves); what he asks of the libraries; a find's lines, and a find taken to. The button and
+// its list are checked in a browser.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { ALSO, findLines, MAX_FINDS } from '../public/js/librarian/ask.js';
 import {
-  listsNames, lookAlso, namesTitle, openingOf, readWords, runsOf, sameAuthor, sameWords, showsAuthor, showsBook, titleSought, wordKey, wordsIn, wordsOf, workKey,
+  idKind, listsNames, lookAlso, namesTitle, openingOf, readWords, runsOf, sameAuthor, sameWords, showsAuthor, showsBook, titleSought, wordKey, wordsIn, wordsOf, workKey,
 } from '../public/js/librarian/also.js';
 import { volumeOf } from '../public/js/librarian/xref.js';
 import { fold } from '../public/js/search.js';
@@ -23,7 +24,9 @@ const h = (l, text) => ({ t: 'h', l, r: [[text, 0]] });
 const li = (text) => ({ t: 'li', r: [[text, 0]], d: 1, m: '•' });
 
 // ------------------------------------------------------------------------------------------------
-// A small library: two Gutenberg files, a Wikisource and two Wikipedias.
+// A small library: two Gutenberg files, a Wikisource and two Wikipedias. And a Gutenberg file of
+// Kiwix's newer form (papers2zim, SPEC §2.2), whose authors' ids are slugs, for the tests that
+// add it.
 
 const pg = { id: 'pg', kind: 'gutenberg', title: 'Gutenberg · Language' };
 const all = { id: 'all', kind: 'gutenberg', title: 'Gutenberg · every book' };
@@ -59,7 +62,17 @@ const BOOKS = {
   mini: [{ id: 'v1', libId: 'mini', title: 'A – Z', author: null }],
 };
 /** The catalogue's index, as search.js bookIndex makes it. */
-const index = () => libraries.flatMap((lib) => BOOKS[lib.id].map((b) => ({ book: b, lib, hay: fold(`${b.title} ${b.author || ''}`), title: fold(b.title) })));
+const entryOf = (lib) => (b) => ({ book: b, lib, hay: fold(`${b.title} ${b.author || ''}`), title: fold(b.title) });
+const index = () => libraries.flatMap((lib) => BOOKS[lib.id].map(entryOf(lib)));
+
+const newer = { id: 'newer', kind: 'gutenberg', title: 'Gutenberg · every book (EN)' };
+const NEWER = [
+  book(newer, 76, 'Adventures of Huckleberry Finn', 'Mark Twain', 'mark-twain'),
+  book(newer, 3176, 'The Innocents Abroad', 'Mark Twain', 'mark-twain'),
+  book(newer, 900, 'Select Discourses', 'John Smith', 'john-smith'),
+];
+/** The catalogue with the newer file at its end. */
+const withNewer = (a) => ({ ...a, libraries: [...libraries, newer], index: () => [...index(), ...NEWER.map(entryOf(newer))] });
 
 /** Each Wikipedia's articles, in its order: [title, blocks, another name]. */
 const ARTICLES = {
@@ -230,6 +243,19 @@ describe('the catalogue\'s books', () => {
     assert.ok(!sameAuthor(e(pg, 'Language'), e(ws, 'Roughing It')));
   });
 
+  it('are one author\'s by the id a Gutenberg file of either form gives, and by name between the two forms', () => {
+    const n = (title) => ({ book: NEWER.find((b) => b.title.startsWith(title)), lib: newer });
+    assert.deepEqual([idKind(e(pg, 'Adventures')), idKind(n('Adventures')), idKind(e(ws, 'Roughing It'))], ['number', 'slug', '']);
+    assert.ok(sameAuthor(n('Adventures'), n('The Innocents')), 'two slugs: the same');
+    assert.ok(!sameAuthor(n('Select'), { book: { ...n('Select').book, authorId: 'john-smith-2' }, lib: newer }), 'two slugs of one name: two authors');
+    // A number and a slug cannot be compared: by name, both ways.
+    assert.ok(sameAuthor(e(pg, 'Adventures'), n('Adventures')));
+    assert.ok(sameAuthor(n('The Innocents'), e(all, 'The Adventures of Tom Sawyer')));
+    assert.ok(!sameAuthor(n('The Innocents'), e(pg, 'Language')));
+    assert.ok(sameAuthor(e(pg, 'A Description'), n('Select')), 'two John Smiths, one by a number and one by a slug: one by name');
+    assert.ok(!sameAuthor(e(pg, 'A Description'), e(all, 'Select Discourses')), 'by their numbers still two');
+  });
+
   it('are one work by their title without a subtitle, and their volume', () => {
     assert.equal(workKey(inHand(pg, 'Language')), 'language');
     assert.equal(workKey(inHand(pg, 'A Tramp Abroad')), 'a tramp abroad #1');
@@ -328,6 +354,24 @@ describe('his answer for a book in hand', () => {
     assert.deepEqual(answer, { text: 'I see nothing else in the library on this book or its author.', finds: [], search: null });
   });
 
+  it('finds the same work and the author\'s other books between Gutenberg\'s older and newer files', async () => {
+    // From the older file's book: the newer file's copy is the same work, its Innocents Abroad another book of his.
+    const older = await lookAlso({ ...withNewer(access()), book: inHand(pg, 'Adventures') });
+    assert.deepEqual(brief(older), [
+      ['author', 'wp', 'Mark Twain'], ['title', 'wp', 'Adventures of Huckleberry Finn'], ['same', 'ws', 'Adventures of Huckleberry Finn'],
+      ['same', 'newer', 'Adventures of Huckleberry Finn'], ['name', 'mini', 'Mark Twain'],
+    ]);
+    assert.equal(older.text, 'Also in the library: the article on its author, the article on this book, the same work in 2 other libraries and 4 other books by Mark Twain. '
+      + 'And an article called “Mark Twain”, though nothing in it tells me it is the same person. Here are the first 5.');
+    // And from the newer file's: the older files' copy and books, as the Wikisource's.
+    const fromNewer = await lookAlso({ ...withNewer(access()), book: NEWER[0] });
+    assert.deepEqual(brief(fromNewer), [
+      ['author', 'wp', 'Mark Twain'], ['title', 'wp', 'Adventures of Huckleberry Finn'], ['same', 'pg', 'Adventures of Huckleberry Finn'],
+      ['same', 'ws', 'Adventures of Huckleberry Finn'], ['name', 'mini', 'Mark Twain'],
+    ]);
+    assert.match(fromNewer.text, /^Also in the library: the article on its author, the article on this book, the same work in 2 other libraries and 4 other books by Mark Twain\. /);
+  });
+
   it('says so of an article of the author\'s name that does not show it is theirs', async () => {
     const answer = await lookAlso({ ...access(), book: inHand(pg, 'Poems') });
     assert.deepEqual(brief(answer), [['name', 'mini', 'Ann Nobody']]);
@@ -384,6 +428,23 @@ describe('his answer from a Wikipedia\'s article', () => {
     assert.equal(answer.text, 'The library has the book this article is about, 2 times.');
     const sapir = await lookAlso({ ...access(), book: volume, article: at(4) });
     assert.deepEqual(brief(sapir), [['itself', 'pg', 'Language: An Introduction to the Study of Speech'], ['itself', 'all', 'Language: An Introduction to the Study of Speech']]);
+  });
+
+  it('on a writer: theirs alone among two of the name, though a book with no number to compare comes first', async () => {
+    const early = { id: 'early', kind: 'wikisource', title: 'Wikisource' };
+    const o = {
+      libraries: [early, pg, all, wp],
+      index: () => [book(early, 'Generall', 'The Generall Historie of Virginia', 'John Smith')].map(entryOf(early))
+        .concat(BOOKS.pg.map(entryOf(pg)), BOOKS.all.map(entryOf(all))),
+      articles: async () => [], blocksOf: async () => [],
+    };
+    const explorer = { title: 'John Smith (explorer)', blocks: [h(1, 'John Smith (explorer)'),
+      p('John Smith (1580–1631) was an English soldier, explorer and author. He wrote A Description of New England (1616) and The Generall Historie of Virginia (1624).')] };
+    const answer = await lookAlso({ ...o, book: volume, article: explorer });
+    // The Wikisource's book joins either John Smith by name, the Gutenberg files' tell theirs apart
+    // by their numbers: the Platonist's Select Discourses is not the explorer's.
+    assert.deepEqual(brief(answer), [['by', 'early', 'The Generall Historie of Virginia'], ['by', 'pg', 'A Description of New England']]);
+    assert.equal(answer.text, 'The library has 2 books by John Smith.');
   });
 
   it('on neither: nothing, though a book has the article\'s word for its title, or an author its name', async () => {
