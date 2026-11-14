@@ -7,7 +7,8 @@
 # files themselves (--zim-files: opened in the browser with each visit, with their indexes), each
 # ZIM in its smaller form (TODO, "Merging back into the main site"): ~460 MB. It is vrlbry's.
 # Each comes from Kiwix's mirror, or, once the mirror no longer has it, from the release
-# "demo-set", which keeps copies of Kiwix's files exactly as published (none here yet).
+# "demo-set", which keeps copies of Kiwix's files exactly as published (the Gutenberg one since
+# 2026-11-13).
 #
 # Prebuilt indexes (tools/build-indexes.mjs, tools/indexes.txt): for big Wikipedias and
 # Wikisources a visitor opens from the web (Kiwix's library), which would otherwise need a build
